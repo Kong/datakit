@@ -7,9 +7,10 @@ use std::time::Duration;
 use url::Url;
 
 use crate::config::get_config_value;
-use crate::data;
-use crate::data::{Input, Payload, State, State::*};
+use crate::data::{Input, State, State::*};
 use crate::nodes::{Node, NodeConfig, NodeFactory};
+use crate::payload;
+use crate::payload::Payload;
 
 #[derive(Clone, Debug)]
 pub struct CallConfig {
@@ -55,12 +56,12 @@ impl Node for Call {
             }
         };
 
-        let mut headers_vec = data::to_pwm_headers(*headers);
+        let mut headers_vec = payload::to_pwm_headers(*headers);
         headers_vec.push((":method", self.config.method.as_str()));
         headers_vec.push((":path", call_url.path()));
         headers_vec.push((":scheme", call_url.scheme()));
 
-        let body_slice = match data::to_pwm_body(*body) {
+        let body_slice = match payload::to_pwm_body(*body) {
             Ok(slice) => slice,
             Err(e) => return Fail(Some(Payload::Error(e))),
         };

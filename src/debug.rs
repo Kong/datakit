@@ -1,5 +1,7 @@
 use crate::config::Config;
-use crate::data::{Payload, State};
+use crate::data::State;
+use crate::payload::Payload;
+
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::HashMap;

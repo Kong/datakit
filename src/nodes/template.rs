@@ -5,8 +5,9 @@ use std::any::Any;
 use std::collections::BTreeMap;
 
 use crate::config::get_config_value;
-use crate::data::{Input, Payload, State};
+use crate::data::{Input, State};
 use crate::nodes::{Node, NodeConfig, NodeFactory};
+use crate::payload::Payload;
 
 #[derive(Clone, Debug)]
 pub struct TemplateConfig {
