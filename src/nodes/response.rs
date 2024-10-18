@@ -6,9 +6,10 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::Relaxed;
 
 use crate::config::get_config_value;
-use crate::data;
-use crate::data::{Input, Payload, Phase, State, State::*};
+use crate::data::{Input, Phase, State, State::*};
 use crate::nodes::{Node, NodeConfig, NodeFactory};
+use crate::payload;
+use crate::payload::Payload;
 
 #[derive(Debug)]
 pub struct ResponseConfig {
@@ -69,7 +70,7 @@ impl Node for Response {
         let body = input.data.first().unwrap_or(&None).as_deref();
         let headers = input.data.get(1).unwrap_or(&None).as_deref();
 
-        let mut headers_vec = data::to_pwm_headers(headers);
+        let mut headers_vec = payload::to_pwm_headers(headers);
 
         if let Some(payload) = body {
             if let Some(content_type) = payload.content_type() {
@@ -77,7 +78,7 @@ impl Node for Response {
             }
         }
 
-        let body_slice = match data::to_pwm_body(body) {
+        let body_slice = match payload::to_pwm_body(body) {
             Ok(slice) => slice,
             Err(e) => return Fail(Some(Payload::Error(e))),
         };

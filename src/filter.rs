@@ -6,12 +6,14 @@ mod data;
 mod debug;
 mod dependency_graph;
 mod nodes;
+mod payload;
 
 use crate::config::Config;
-use crate::data::{Data, Input, Payload, Phase, Phase::*, State};
+use crate::data::{Data, Input, Phase, Phase::*, State};
 use crate::debug::{Debug, RunMode};
 use crate::dependency_graph::DependencyGraph;
 use crate::nodes::{Node, NodeMap};
+use crate::payload::Payload;
 
 // -----------------------------------------------------------------------------
 // Root Context
@@ -148,7 +150,7 @@ impl DataKitFilter {
     }
 
     fn send_default_fail_response(&self) {
-        let body = data::to_json_error_body(
+        let body = payload::to_json_error_body(
             "An unexpected error ocurred",
             self.get_property(vec!["ngx", "kong_request_id"]),
         );
@@ -167,7 +169,7 @@ impl DataKitFilter {
     }
 
     fn set_headers_data(&mut self, vec: Vec<(String, String)>, name: &str) {
-        let payload = data::from_pwm_headers(vec);
+        let payload = payload::from_pwm_headers(vec);
         self.set_data(name, State::Done(Some(payload)));
     }
 
@@ -227,7 +229,7 @@ impl DataKitFilter {
     fn set_service_request_headers(&mut self) {
         if self.do_service_request_headers {
             if let Some(payload) = self.data.first_input_for("service_request_headers", None) {
-                let headers = data::to_pwm_headers(Some(payload));
+                let headers = payload::to_pwm_headers(Some(payload));
                 self.set_http_request_headers(headers);
                 self.do_service_request_headers = false;
             }
@@ -337,7 +339,7 @@ impl HttpContext for DataKitFilter {
 
         if self.do_response_headers {
             if let Some(payload) = self.data.first_input_for("response_headers", None) {
-                let headers = data::to_pwm_headers(Some(payload));
+                let headers = payload::to_pwm_headers(Some(payload));
                 self.set_http_response_headers(headers);
             }
         }
