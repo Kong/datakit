@@ -8,13 +8,14 @@ use std::collections::BTreeMap;
 
 use crate::config::get_config_value;
 use crate::data::{Input, State};
-use crate::nodes::{Node, NodeConfig, NodeFactory};
+use crate::nodes::{Node, NodeConfig, NodeFactory, PortConfig};
 use crate::payload::Payload;
 
 #[derive(Clone, Debug)]
 pub struct JqConfig {
     jq: String,
     inputs: Vec<String>,
+    _outputs: Vec<String>, // TODO: implement multiple outputs
 }
 
 impl NodeConfig for JqConfig {
@@ -69,12 +70,12 @@ impl Errors {
 
 impl From<Errors> for State {
     fn from(val: Errors) -> Self {
-        State::Fail(Some(Payload::Error(if val.is_empty() {
+        State::Fail(vec![Some(Payload::Error(if val.is_empty() {
             // should be unreachable
             "unknown jq error".to_string()
         } else {
             val.0.join(", ")
-        })))
+        }))])
     }
 }
 
@@ -178,22 +179,19 @@ impl Jq {
 impl Node for Jq {
     fn run(&self, _ctx: &dyn HttpContext, input: &Input) -> State {
         match self.exec(input.data) {
-            Ok(mut results) => {
-                State::Done(match results.len() {
+            Ok(results) => {
+                match results.len() {
                     // empty
-                    0 => None,
+                    0 => State::Done(vec![None]),
 
-                    // single
-                    1 => {
-                        let Some(item) = results.pop() else {
-                            unreachable!();
-                        };
-                        Some(Payload::Json(item))
-                    }
-
-                    // more than one, return as an array
-                    _ => Some(Payload::Json(results.into())),
-                })
+                    // one or more
+                    _ => State::Done(
+                        results
+                            .into_iter()
+                            .map(|item| Some(Payload::Json(item)))
+                            .collect(),
+                    ),
+                }
             }
             Err(errs) => errs.into(),
         }
@@ -202,16 +200,35 @@ impl Node for Jq {
 
 pub struct JqFactory {}
 
+fn sanitize_jq_inputs(inputs: &[String]) -> Vec<String> {
+    // TODO: this is a minimal implementation.
+    // Ideally we need to validate input names into valid jq variables
+    inputs
+        .iter()
+        .map(|input| input.replace('.', "_").replace('$', ""))
+        .collect()
+}
+
 impl NodeFactory for JqFactory {
+    fn default_input_ports(&self) -> PortConfig {
+        Default::default()
+    }
+
+    fn default_output_ports(&self) -> PortConfig {
+        Default::default()
+    }
+
     fn new_config(
         &self,
         _name: &str,
         inputs: &[String],
+        outputs: &[String],
         bt: &BTreeMap<String, JsonValue>,
     ) -> Result<Box<dyn NodeConfig>, String> {
         Ok(Box::new(JqConfig {
             jq: get_config_value(bt, "jq").unwrap_or(".".to_string()),
-            inputs: inputs.to_vec(),
+            inputs: sanitize_jq_inputs(inputs),
+            _outputs: outputs.to_vec(),
         }))
     }
 

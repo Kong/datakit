@@ -11,9 +11,19 @@
                   "type": { "type": "string" },
                   "name": { "type": "string" },
                   "input": { "type": "string" },
-                  "inputs": { "type": "array", "items": { "type": "string" } },
+                  "inputs": {
+                     "oneOf": [
+                        { "type": "array", "items": { "type": "string" } },
+                        { "type": "object", "additionalProperties": { "type": "string" } }
+                     ]
+                  },
                   "output": { "type": "string" },
-                  "outputs": { "type": "array", "items": { "type": "string" } }
+                  "outputs": {
+                     "oneOf": [
+                        { "type": "array", "items": { "type": "string" } },
+                        { "type": "object", "additionalProperties": { "type": "string" } }
+                     ]
+                  }
                }
             }
          }

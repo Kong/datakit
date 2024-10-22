@@ -8,7 +8,7 @@ use url::Url;
 
 use crate::config::get_config_value;
 use crate::data::{Input, State, State::*};
-use crate::nodes::{Node, NodeConfig, NodeFactory};
+use crate::nodes::{Node, NodeConfig, NodeFactory, PortConfig};
 use crate::payload;
 use crate::payload::Payload;
 
@@ -44,7 +44,7 @@ impl Node for Call {
             Ok(u) => u,
             Err(err) => {
                 log::error!("call: failed parsing URL from 'url' field: {err}");
-                return Done(None);
+                return Done(vec![]);
             }
         };
 
@@ -52,7 +52,7 @@ impl Node for Call {
             Some(h) => h,
             None => {
                 log::error!("call: failed getting host from URL");
-                return Done(None);
+                return Done(vec![]);
             }
         };
 
@@ -63,7 +63,7 @@ impl Node for Call {
 
         let body_slice = match payload::to_pwm_body(*body) {
             Ok(slice) => slice,
-            Err(e) => return Fail(Some(Payload::Error(e))),
+            Err(e) => return Fail(vec![Some(Payload::Error(e))]),
         };
 
         let trailers = vec![];
@@ -87,14 +87,18 @@ impl Node for Call {
                 log::debug!("call: dispatch call id: {:?}", id);
                 Waiting(id)
             }
-            Err(status) => Fail(Some(Payload::Error(format!("error: {:?}", status)))),
+            Err(status) => Fail(vec![Some(Payload::Error(format!("error: {:?}", status)))]),
         }
     }
 
     fn resume(&self, ctx: &dyn HttpContext, _inputs: &Input) -> State {
         log::debug!("call: resume");
 
-        let r = if let Some(body) = ctx.get_http_call_response_body(0, usize::MAX) {
+        let headers = Some(payload::from_pwm_headers(
+            ctx.get_http_call_response_headers(),
+        ));
+
+        let body = if let Some(body) = ctx.get_http_call_response_body(0, usize::MAX) {
             let content_type = ctx.get_http_call_response_header("Content-Type");
 
             Payload::from_bytes(body, content_type.as_deref())
@@ -102,20 +106,34 @@ impl Node for Call {
             None
         };
 
-        // TODO once we have multiple outputs,
-        // also return headers and produce a Fail() status on HTTP >= 400
+        // TODO only produce an output if it is connected
+        // TODO produce a Fail() status on HTTP >= 400
 
-        Done(r)
+        Done(vec![body, headers])
     }
 }
 
 pub struct CallFactory {}
 
 impl NodeFactory for CallFactory {
+    fn default_input_ports(&self) -> PortConfig {
+        PortConfig {
+            defaults: PortConfig::names(&["body", "headers", "query"]),
+            user_defined_ports: false,
+        }
+    }
+    fn default_output_ports(&self) -> PortConfig {
+        PortConfig {
+            defaults: PortConfig::names(&["body", "headers"]),
+            user_defined_ports: false,
+        }
+    }
+
     fn new_config(
         &self,
         _name: &str,
         _inputs: &[String],
+        _outputs: &[String],
         bt: &BTreeMap<String, Value>,
     ) -> Result<Box<dyn NodeConfig>, String> {
         Ok(Box::new(CallConfig {

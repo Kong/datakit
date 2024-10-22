@@ -1,3 +1,4 @@
+use lazy_static::lazy_static;
 use proxy_wasm::{traits::*, types::*};
 use std::rc::Rc;
 
@@ -8,12 +9,40 @@ mod dependency_graph;
 mod nodes;
 mod payload;
 
-use crate::config::Config;
+use crate::config::{Config, ImplicitNode};
 use crate::data::{Data, Input, Phase, Phase::*, State};
 use crate::debug::{Debug, RunMode};
 use crate::dependency_graph::DependencyGraph;
-use crate::nodes::{Node, NodeMap};
+use crate::nodes::{Node, NodeVec};
 use crate::payload::Payload;
+use crate::ImplicitNodeId::*;
+
+// -----------------------------------------------------------------------------
+// Implicit nodes
+// -----------------------------------------------------------------------------
+
+#[derive(Copy, Clone)]
+enum ImplicitNodeId {
+    Request = 0,
+    ServiceRequest = 1,
+    Response = 2,
+    ServiceResponse = 3,
+}
+
+#[derive(Copy, Clone)]
+enum ImplicitPortId {
+    Body = 0,
+    Headers = 1,
+}
+
+lazy_static! {
+    static ref IMPLICIT_NODES: Vec<ImplicitNode> = vec![
+        ImplicitNode::new("request", &[], &["body", "headers"]),
+        ImplicitNode::new("service_request", &["body", "headers"], &[]),
+        ImplicitNode::new("response", &["body", "headers"], &[]),
+        ImplicitNode::new("service_response", &[], &["body", "headers"]),
+    ];
+}
 
 // -----------------------------------------------------------------------------
 // Root Context
@@ -28,7 +57,7 @@ impl Context for DataKitFilterRootContext {}
 impl RootContext for DataKitFilterRootContext {
     fn on_configure(&mut self, _config_size: usize) -> bool {
         match self.get_plugin_configuration() {
-            Some(config_bytes) => match Config::new(config_bytes) {
+            Some(config_bytes) => match Config::new(config_bytes, &IMPLICIT_NODES) {
                 Ok(config) => {
                     self.config = Some(Rc::new(config));
                     true
@@ -62,14 +91,14 @@ impl RootContext for DataKitFilterRootContext {
         // to avoid cloning every time?
         let data = Data::new(graph.clone());
 
-        let do_request_headers = graph.has_dependents("request_headers");
-        let do_request_body = graph.has_dependents("request_body");
-        let do_service_request_headers = graph.has_providers("service_request_headers");
-        let do_service_request_body = graph.has_providers("service_request_body");
-        let do_service_response_headers = graph.has_dependents("service_response_headers");
-        let do_service_response_body = graph.has_dependents("service_response_body");
-        let do_response_headers = graph.has_providers("response_headers");
-        let do_response_body = graph.has_providers("response_body");
+        let do_request_headers = graph.has_dependents("request", "headers");
+        let do_request_body = graph.has_dependents("request", "body");
+        let do_service_request_headers = graph.has_providers("service_request", "headers");
+        let do_service_request_body = graph.has_providers("service_request", "body");
+        let do_service_response_headers = graph.has_dependents("service_response", "headers");
+        let do_service_response_body = graph.has_dependents("service_response", "body");
+        let do_response_headers = graph.has_providers("response", "headers");
+        let do_response_body = graph.has_providers("response", "body");
 
         Some(Box::new(DataKitFilter {
             config,
@@ -95,7 +124,7 @@ impl RootContext for DataKitFilterRootContext {
 
 pub struct DataKitFilter {
     config: Rc<Config>,
-    nodes: NodeMap,
+    nodes: NodeVec,
     data: Data,
     debug: Option<Debug>,
     failed: bool,
@@ -161,16 +190,27 @@ impl DataKitFilter {
         );
     }
 
-    fn set_data(&mut self, name: &str, state: State) {
-        if let Some(ref mut debug) = self.debug {
-            debug.set_data(name, &state);
-        }
-        self.data.set(name, state);
+    fn set_headers_data(&mut self, node: ImplicitNodeId, vec: Vec<(String, String)>) {
+        let payload = payload::from_pwm_headers(vec);
+        self.data
+            .fill_port(node as usize, ImplicitPortId::Headers as usize, payload)
+            .unwrap();
     }
 
-    fn set_headers_data(&mut self, vec: Vec<(String, String)>, name: &str) {
-        let payload = payload::from_pwm_headers(vec);
-        self.set_data(name, State::Done(Some(payload)));
+    fn set_body_data(&mut self, node: ImplicitNodeId, payload: Payload) {
+        self.data
+            .fill_port(node as usize, ImplicitPortId::Body as usize, payload)
+            .unwrap();
+    }
+
+    fn get_headers_data(&self, node: ImplicitNodeId) -> Option<&Payload> {
+        self.data
+            .fetch_port(node as usize, ImplicitPortId::Headers as usize)
+    }
+
+    fn get_body_data(&self, node: ImplicitNodeId) -> Option<&Payload> {
+        self.data
+            .fetch_port(node as usize, ImplicitPortId::Body as usize)
     }
 
     fn run_nodes(&mut self, phase: Phase) -> Action {
@@ -181,15 +221,18 @@ impl DataKitFilter {
             debug_is_tracing = debug.is_tracing();
         }
 
+        let from = self.config.number_of_implicits();
+        let to = self.config.node_count();
+
         while !self.failed {
             let mut any_ran = false;
-            for name in self.config.get_node_names() {
+            for i in from..to {
                 let node: &dyn Node = self
                     .nodes
-                    .get(name)
-                    .expect("self.nodes doesn't match self.node_names")
+                    .get(i)
+                    .expect("self.nodes doesn't match node_count")
                     .as_ref();
-                if let Some(inputs) = self.data.get_inputs_for(name, None) {
+                if let Some(inputs) = self.data.get_inputs_for(i, None) {
                     any_ran = true;
 
                     let input = Input {
@@ -199,6 +242,7 @@ impl DataKitFilter {
                     let state = node.run(self as &dyn HttpContext, &input);
 
                     if let Some(ref mut debug) = self.debug {
+                        let name = self.data.get_node_name(i);
                         debug.run(name, &inputs, &state, RunMode::Run);
                     }
 
@@ -215,7 +259,7 @@ impl DataKitFilter {
                         }
                     }
 
-                    self.data.set(name, state);
+                    self.data.set(i, state);
                 }
             }
             if !any_ran {
@@ -228,7 +272,7 @@ impl DataKitFilter {
 
     fn set_service_request_headers(&mut self) {
         if self.do_service_request_headers {
-            if let Some(payload) = self.data.first_input_for("service_request_headers", None) {
+            if let Some(payload) = self.get_headers_data(ServiceRequest) {
                 let headers = payload::to_pwm_headers(Some(payload));
                 self.set_http_request_headers(headers);
                 self.do_service_request_headers = false;
@@ -238,7 +282,7 @@ impl DataKitFilter {
 
     fn set_service_request_body(&mut self) {
         if self.do_service_request_body {
-            if let Some(payload) = self.data.first_input_for("service_request_body", None) {
+            if let Some(payload) = self.get_body_data(ServiceRequest) {
                 if let Ok(bytes) = payload.to_bytes() {
                     self.set_http_request_body(0, bytes.len(), &bytes);
                 }
@@ -258,13 +302,16 @@ impl Context for DataKitFilter {
     ) {
         log::debug!("DataKitFilter: on http call response, id = {:?}", token_id);
 
-        for name in self.config.get_node_names() {
+        let from = self.config.number_of_implicits();
+        let to = self.config.node_count();
+
+        for i in from..to {
             let node: &dyn Node = self
                 .nodes
-                .get(name)
-                .expect("self.nodes doesn't match self.node_names")
+                .get(i)
+                .expect("self.nodes doesn't match node_count")
                 .as_ref();
-            if let Some(inputs) = self.data.get_inputs_for(name, Some(token_id)) {
+            if let Some(inputs) = self.data.get_inputs_for(i, Some(token_id)) {
                 let input = Input {
                     data: &inputs,
                     phase: HttpCallResponse,
@@ -272,10 +319,11 @@ impl Context for DataKitFilter {
                 let state = node.resume(self, &input);
 
                 if let Some(ref mut debug) = self.debug {
+                    let name = self.data.get_node_name(i);
                     debug.run(name, &inputs, &state, RunMode::Resume);
                 }
 
-                self.data.set(name, state);
+                self.data.set(i, state);
                 break;
             }
         }
@@ -297,7 +345,7 @@ impl HttpContext for DataKitFilter {
 
         if self.do_request_headers {
             let vec = self.get_http_request_headers();
-            self.set_headers_data(vec, "request_headers");
+            self.set_headers_data(Request, vec);
         }
 
         let action = self.run_nodes(HttpRequestHeaders);
@@ -316,8 +364,9 @@ impl HttpContext for DataKitFilter {
         if eof && self.do_request_body {
             if let Some(bytes) = self.get_http_request_body(0, body_size) {
                 let content_type = self.get_http_request_header("Content-Type");
-                let body_payload = Payload::from_bytes(bytes, content_type.as_deref());
-                self.set_data("request_body", State::Done(body_payload));
+                if let Some(payload) = Payload::from_bytes(bytes, content_type.as_deref()) {
+                    self.set_body_data(Request, payload);
+                }
             }
         }
 
@@ -332,20 +381,20 @@ impl HttpContext for DataKitFilter {
     fn on_http_response_headers(&mut self, _nheaders: usize, _eof: bool) -> Action {
         if self.do_service_response_headers {
             let vec = self.get_http_response_headers();
-            self.set_headers_data(vec, "service_response_headers");
+            self.set_headers_data(ServiceResponse, vec);
         }
 
         let action = self.run_nodes(HttpResponseHeaders);
 
         if self.do_response_headers {
-            if let Some(payload) = self.data.first_input_for("response_headers", None) {
+            if let Some(payload) = self.get_headers_data(Response) {
                 let headers = payload::to_pwm_headers(Some(payload));
                 self.set_http_response_headers(headers);
             }
         }
 
         if self.do_response_body {
-            if let Some(payload) = self.data.first_input_for("response_body", None) {
+            if let Some(payload) = self.get_body_data(Response) {
                 let content_length = payload.len().map(|n| n.to_string());
                 self.set_http_response_header("Content-Length", content_length.as_deref());
                 self.set_http_response_header("Content-Type", payload.content_type());
@@ -370,15 +419,16 @@ impl HttpContext for DataKitFilter {
         if eof && self.do_service_response_body {
             if let Some(bytes) = self.get_http_response_body(0, body_size) {
                 let content_type = self.get_http_response_header("Content-Type");
-                let payload = Payload::from_bytes(bytes, content_type.as_deref());
-                self.set_data("service_response_body", State::Done(payload));
+                if let Some(payload) = Payload::from_bytes(bytes, content_type.as_deref()) {
+                    self.set_body_data(ServiceResponse, payload);
+                }
             }
         }
 
         let action = self.run_nodes(HttpResponseBody);
 
         if self.do_response_body {
-            if let Some(payload) = self.data.first_input_for("response_body", None) {
+            if let Some(payload) = self.get_body_data(Response) {
                 if let Ok(bytes) = payload.to_bytes() {
                     self.set_http_response_body(0, bytes.len(), &bytes);
                 } else {
@@ -387,8 +437,9 @@ impl HttpContext for DataKitFilter {
             } else if let Some(debug) = &self.debug {
                 if let Some(bytes) = self.get_http_response_body(0, body_size) {
                     let content_type = debug.response_body_content_type();
-                    let payload = Payload::from_bytes(bytes, content_type.as_deref());
-                    self.set_data("response_body", State::Done(payload));
+                    if let Some(payload) = Payload::from_bytes(bytes, content_type.as_deref()) {
+                        self.set_body_data(Response, payload);
+                    }
                 }
             }
         }
@@ -402,6 +453,7 @@ impl HttpContext for DataKitFilter {
 }
 
 proxy_wasm::main! {{
+    nodes::register_node("implicit", Box::new(nodes::implicit::ImplicitFactory {}));
     nodes::register_node("template", Box::new(nodes::template::TemplateFactory {}));
     nodes::register_node("call", Box::new(nodes::call::CallFactory {}));
     nodes::register_node("response", Box::new(nodes::response::ResponseFactory {}));

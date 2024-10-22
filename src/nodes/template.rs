@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 
 use crate::config::get_config_value;
 use crate::data::{Input, State};
-use crate::nodes::{Node, NodeConfig, NodeFactory};
+use crate::nodes::{Node, NodeConfig, NodeFactory, PortConfig};
 use crate::payload::Payload;
 
 #[derive(Clone, Debug)]
@@ -83,13 +83,13 @@ impl Node for Template<'_> {
             Ok(output) => {
                 log::debug!("output: {output}");
                 match Payload::from_bytes(output.into(), Some(&self.config.content_type)) {
-                    p @ Some(Payload::Error(_)) => State::Fail(p),
-                    p => State::Done(p),
+                    p @ Some(Payload::Error(_)) => State::Fail(vec![p]),
+                    p => State::Done(vec![p]),
                 }
             }
-            Err(err) => State::Fail(Some(Payload::Error(format!(
+            Err(err) => State::Fail(vec![Some(Payload::Error(format!(
                 "error rendering template: {err}"
-            )))),
+            )))]),
         }
     }
 }
@@ -97,10 +97,22 @@ impl Node for Template<'_> {
 pub struct TemplateFactory {}
 
 impl NodeFactory for TemplateFactory {
+    fn default_input_ports(&self) -> PortConfig {
+        Default::default()
+    }
+
+    fn default_output_ports(&self) -> PortConfig {
+        PortConfig {
+            defaults: PortConfig::names(&["output"]),
+            user_defined_ports: false,
+        }
+    }
+
     fn new_config(
         &self,
         _name: &str,
         inputs: &[String],
+        _outputs: &[String],
         bt: &BTreeMap<String, Value>,
     ) -> Result<Box<dyn NodeConfig>, String> {
         Ok(Box::new(TemplateConfig {
