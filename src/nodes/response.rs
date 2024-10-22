@@ -7,7 +7,7 @@ use std::sync::atomic::Ordering::Relaxed;
 
 use crate::config::get_config_value;
 use crate::data::{Input, Phase, State, State::*};
-use crate::nodes::{Node, NodeConfig, NodeFactory};
+use crate::nodes::{Node, NodeConfig, NodeDefaultLink, NodeFactory, PortConfig};
 use crate::payload;
 use crate::payload::Payload;
 
@@ -33,8 +33,19 @@ impl NodeConfig for ResponseConfig {
         self
     }
 
-    fn default_outputs(&self) -> Option<Vec<String>> {
-        Some(vec!["response_body".to_string()])
+    fn default_outputs(&self) -> Option<Vec<NodeDefaultLink>> {
+        Some(vec![
+            NodeDefaultLink {
+                this_port: "body".into(),
+                other_node: "response".into(),
+                other_port: "body".into(),
+            },
+            NodeDefaultLink {
+                this_port: "headers".into(),
+                other_node: "response".into(),
+                other_port: "headers".into(),
+            },
+        ])
     }
 }
 
@@ -80,7 +91,7 @@ impl Node for Response {
 
         let body_slice = match payload::to_pwm_body(body) {
             Ok(slice) => slice,
-            Err(e) => return Fail(Some(Payload::Error(e))),
+            Err(e) => return Fail(vec![Some(Payload::Error(e))]),
         };
 
         if input.phase == Phase::HttpResponseBody {
@@ -96,17 +107,32 @@ impl Node for Response {
             ctx.send_http_response(status, headers_vec, body_slice.as_deref());
         }
 
-        Done(None)
+        Done(vec![None])
     }
 }
 
 pub struct ResponseFactory {}
 
 impl NodeFactory for ResponseFactory {
+    fn default_input_ports(&self) -> PortConfig {
+        PortConfig {
+            defaults: PortConfig::names(&["body", "headers"]),
+            user_defined_ports: false,
+        }
+    }
+
+    fn default_output_ports(&self) -> PortConfig {
+        PortConfig {
+            defaults: PortConfig::names(&["body", "headers"]),
+            user_defined_ports: false,
+        }
+    }
+
     fn new_config(
         &self,
         name: &str,
         _inputs: &[String],
+        _outputs: &[String],
         bt: &BTreeMap<String, Value>,
     ) -> Result<Box<dyn NodeConfig>, String> {
         Ok(Box::new(ResponseConfig {

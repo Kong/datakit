@@ -23,11 +23,16 @@ struct RunOperation {
     action: RunMode,
 }
 
+#[derive(Serialize)]
+struct PortValue {
+    data_type: String,
+    value: Option<Value>,
+}
+
 struct SetOperation {
     node_name: String,
-    data_type: String,
     status: DataMode,
-    value: Option<Value>,
+    values: Vec<PortValue>,
 }
 
 enum Operation {
@@ -52,17 +57,26 @@ impl State {
     }
 }
 
-fn payload_to_op_info(p: &Option<Payload>, default_type: &str) -> (String, Option<Value>) {
-    if let Some(payload) = p {
-        let dt = payload.content_type().unwrap_or(default_type).to_string();
-
-        match payload.to_json() {
-            Ok(v) => (dt, Some(v)),
-            Err(e) => ("fail".to_string(), Some(serde_json::json!(e))),
-        }
-    } else {
-        ("none".to_string(), None)
-    }
+fn payloads_to_values(payloads: &[Option<Payload>], default_type: &str) -> Vec<PortValue> {
+    payloads
+        .iter()
+        .map(|p| match p {
+            Some(payload) => match payload.to_json() {
+                Ok(v) => PortValue {
+                    data_type: payload.content_type().unwrap_or(default_type).to_string(),
+                    value: Some(v),
+                },
+                Err(e) => PortValue {
+                    data_type: "fail".into(),
+                    value: Some(serde_json::json!(e)),
+                },
+            },
+            None => PortValue {
+                data_type: "none".into(),
+                value: None,
+            },
+        })
+        .collect()
 }
 
 impl Debug {
@@ -82,17 +96,14 @@ impl Debug {
 
     pub fn set_data(&mut self, name: &str, state: &State) {
         if self.trace {
-            let (data_type, value) = match state {
-                State::Done(p) => payload_to_op_info(p, "raw"),
-                State::Waiting(_) => ("waiting".to_string(), None),
-                State::Fail(p) => payload_to_op_info(p, "fail"),
-            };
-
             self.operations.push(Operation::Set(SetOperation {
                 node_name: name.to_string(),
-                data_type,
                 status: state.to_data_mode(),
-                value,
+                values: match state {
+                    State::Waiting(_) => vec![],
+                    State::Done(p) => payloads_to_values(p, "raw"),
+                    State::Fail(p) => payloads_to_values(p, "fail"),
+                },
             }));
         }
     }
@@ -135,7 +146,7 @@ impl Debug {
             #[serde(skip_serializing_if = "Option::is_none")]
             r#type: Option<&'a str>,
             #[serde(skip_serializing_if = "Option::is_none")]
-            value: Option<&'a Value>,
+            values: Option<&'a Vec<PortValue>>,
         }
 
         let mut actions: Vec<TraceAction> = vec![];
@@ -147,28 +158,28 @@ impl Debug {
                         RunMode::Run => "run",
                         RunMode::Resume => "resume",
                     },
-                    name: &run.node_name,
                     r#type: Some(&run.node_type),
-                    value: None,
+                    name: &run.node_name,
+                    values: None,
                 },
                 Operation::Set(set) => match set.status {
                     DataMode::Done => TraceAction {
                         action: "value",
                         name: &set.node_name,
-                        r#type: Some(&set.data_type),
-                        value: set.value.as_ref(),
+                        r#type: None,
+                        values: Some(&set.values),
                     },
                     DataMode::Waiting => TraceAction {
                         action: "wait",
                         name: &set.node_name,
                         r#type: None,
-                        value: None,
+                        values: None,
                     },
                     DataMode::Fail => TraceAction {
                         action: "fail",
                         name: &set.node_name,
                         r#type: None,
-                        value: set.value.as_ref(),
+                        values: Some(&set.values),
                     },
                 },
             });

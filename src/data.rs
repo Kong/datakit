@@ -1,5 +1,3 @@
-use std::collections::BTreeMap;
-
 use crate::dependency_graph::DependencyGraph;
 use crate::payload::Payload;
 
@@ -21,107 +19,164 @@ pub struct Input<'a> {
 #[derive(Debug)]
 pub enum State {
     Waiting(u32),
-    Done(Option<Payload>),
-    Fail(Option<Payload>),
+    Done(Vec<Option<Payload>>),
+    Fail(Vec<Option<Payload>>),
 }
 
-#[derive(Default)]
 pub struct Data {
     graph: DependencyGraph,
-    states: BTreeMap<String, State>,
+    states: Vec<Option<State>>,
+}
+
+fn set_port(
+    ports: &mut [Option<Payload>],
+    port: usize,
+    payload: Payload,
+) -> Result<(), &'static str> {
+    match ports.get(port) {
+        Some(_) => Err("cannot overwrite a payload"),
+        None => {
+            ports[port] = Some(payload);
+            Ok(())
+        }
+    }
+}
+
+fn get_port(ports: &[Option<Payload>], port: usize) -> Option<&Payload> {
+    match ports.get(port) {
+        Some(Some(ref payload)) => Some(payload),
+        _ => None,
+    }
 }
 
 impl Data {
     pub fn new(graph: DependencyGraph) -> Data {
-        Data {
-            graph,
-            states: Default::default(),
+        let n = graph.number_of_nodes();
+        let mut states = Vec::with_capacity(n);
+        states.resize_with(n, Default::default);
+        Data { graph, states }
+    }
+
+    pub fn get_node_name(&self, i: usize) -> &str {
+        self.graph.get_node_name(i).expect("valid index")
+    }
+
+    pub fn set(&mut self, node: usize, state: State) {
+        self.states[node] = Some(state);
+    }
+
+    pub fn fill_port(
+        &mut self,
+        node: usize,
+        port: usize,
+        payload: Payload,
+    ) -> Result<(), &'static str> {
+        match &mut self.states[node] {
+            None => {
+                let mut ports: Vec<Option<Payload>> =
+                    Vec::with_capacity(self.graph.number_of_outputs(node));
+                ports[port] = Some(payload);
+                let state = State::Done(ports);
+                self.states[node] = Some(state);
+                Ok(())
+            }
+            Some(State::Waiting(_)) => Err("cannot force payload on a waiting node"),
+            Some(State::Done(ports)) => set_port(ports, port, payload),
+            Some(State::Fail(ports)) => set_port(ports, port, payload),
         }
     }
 
-    pub fn set(&mut self, name: &str, state: State) {
-        self.states.insert(name.to_string(), state);
+    pub fn fetch_port(&self, node: usize, port: usize) -> Option<&Payload> {
+        match self.graph.get_provider(node, port) {
+            Some((n, p)) => match self.states.get(n).unwrap() {
+                Some(State::Waiting(_)) => None,
+                Some(State::Done(ports)) => get_port(ports, p),
+                Some(State::Fail(ports)) => get_port(ports, p),
+                None => None,
+            },
+            None => None,
+        }
     }
 
-    fn can_trigger(&self, name: &str, waiting: Option<u32>) -> bool {
-        // If node is Done, avoid producing inputs
-        // and re-triggering its execution.
-        if let Some(state) = self.states.get(name) {
-            match state {
-                State::Done(_) => {
-                    return false;
-                }
+    fn can_trigger(&self, i: usize, waiting: Option<u32>) -> bool {
+        // This is intentionally written with all of the match arms
+        // stated explicitly (instead of using _ catch-alls),
+        // so that the trigger logic and all its states
+        // are considered by the reader.
+        match &self.states[i] {
+            // state was never created, trigger
+            None => true,
+            Some(state) => match state {
+                // never retrigger Done
+                State::Done(_) => false,
+                // never retrigger Fail
+                State::Fail(_) => false,
                 State::Waiting(w) => match &waiting {
-                    Some(id) => {
-                        if w != id {
-                            return false;
-                        }
-                    }
-                    None => return false,
+                    // we're waiting on the right id, allow triggering
+                    Some(id) if w == id => true,
+                    // waiting on something else, skip
+                    Some(_) => false,
+                    // not called from a wait state
+                    None => false,
                 },
-                State::Fail(_) => {
-                    return false;
+            },
+        }
+    }
+
+    fn for_each_input<'a, T>(
+        &'a self,
+        i: usize,
+        f: impl for<'b> Fn(Option<&'a Payload>, &'b mut T),
+        mut t: T,
+    ) -> Option<T> {
+        for input in self.graph.each_input(i) {
+            // if input port is connected in the graph
+            match *input {
+                Some((n, p)) => {
+                    // check if other node is Done
+                    match &self.states[n] {
+                        Some(State::Done(ports)) => {
+                            // check if port has payload available
+                            match &ports[p] {
+                                // ok, has payload
+                                Some(payload) => f(Some(payload), &mut t),
+                                // no payload available
+                                None => return None,
+                            }
+                        }
+                        Some(State::Waiting(_)) => return None,
+                        Some(State::Fail(_)) => return None,
+                        None => return None,
+                    }
                 }
+                None => f(None, &mut t), // ok, port is not connected
             }
         }
 
-        // Check that all inputs have payloads available
-        for input in self.graph.each_input(name) {
-            let val = self.states.get(input);
-            match val {
-                Some(State::Done(_)) => {}
-                _ => {
-                    return false;
-                }
-            };
-        }
-
-        true
+        Some(t)
     }
 
     pub fn get_inputs_for(
         &self,
-        name: &str,
+        node: usize,
         waiting: Option<u32>,
     ) -> Option<Vec<Option<&Payload>>> {
-        if !self.can_trigger(name, waiting) {
+        if !self.can_trigger(node, waiting) {
             return None;
         }
+
+        // Check first that all connected inputs are ready
+        self.for_each_input(node, |_, _| (), &mut ())?;
 
         // If so, allocate the vector with the result.
-        let mut vec: Vec<Option<&Payload>> = Vec::new();
-        for input in self.graph.each_input(name) {
-            if let Some(State::Done(p)) = self.states.get(input) {
-                vec.push(p.as_ref());
-            }
-        }
-
-        Some(vec)
-    }
-
-    /// If the node is triggerable, that is, it has all its required
-    /// inputs available to trigger (i.e. none of its inputs are in a
-    /// `Waiting` state), then return the payload of the first input that
-    /// is in a `Done state.
-    ///
-    /// Note that by returning an `Option<&Payload>` this makes no
-    /// distinction between the node being not triggerable or the
-    /// node being triggerable via a `Done(None)` input.
-    ///
-    /// This is not an issue because this function is intended for use
-    /// with the implicit nodes (`response_body`, etc.) which are
-    /// handled as special cases directly by the filter.
-    pub fn first_input_for(&self, name: &str, waiting: Option<u32>) -> Option<&Payload> {
-        if !self.can_trigger(name, waiting) {
-            return None;
-        }
-
-        for input in self.graph.each_input(name) {
-            if let Some(State::Done(p)) = self.states.get(input) {
-                return p.as_ref();
-            }
-        }
-
-        None
+        let n = self.graph.number_of_inputs(node);
+        self.for_each_input(
+            node,
+            |payload, v: &mut Vec<Option<&Payload>>| match payload {
+                Some(p) => v.push(Some(p)),
+                None => v.push(None),
+            },
+            Vec::with_capacity(n),
+        )
     }
 }
