@@ -16,6 +16,7 @@ use crate::dependency_graph::DependencyGraph;
 use crate::nodes::{Node, NodeVec};
 use crate::payload::Payload;
 use crate::ImplicitNodeId::*;
+use crate::ImplicitPortId::*;
 
 // -----------------------------------------------------------------------------
 // Implicit nodes
@@ -91,14 +92,17 @@ impl RootContext for DataKitFilterRootContext {
         // to avoid cloning every time?
         let data = Data::new(graph.clone());
 
-        let do_request_headers = graph.has_dependents("request", "headers");
-        let do_request_body = graph.has_dependents("request", "body");
-        let do_service_request_headers = graph.has_providers("service_request", "headers");
-        let do_service_request_body = graph.has_providers("service_request", "body");
-        let do_service_response_headers = graph.has_dependents("service_response", "headers");
-        let do_service_response_body = graph.has_dependents("service_response", "body");
-        let do_response_headers = graph.has_providers("response", "headers");
-        let do_response_body = graph.has_providers("response", "body");
+        let do_request_headers = graph.has_dependents(Request as usize, Headers as usize);
+        let do_request_body = graph.has_dependents(Request as usize, Body as usize);
+        let do_service_request_headers =
+            graph.has_providers(ServiceRequest as usize, Headers as usize);
+        let do_service_request_body = graph.has_providers(ServiceRequest as usize, Body as usize);
+        let do_service_response_headers =
+            graph.has_dependents(ServiceResponse as usize, Headers as usize);
+        let do_service_response_body =
+            graph.has_dependents(ServiceResponse as usize, Body as usize);
+        let do_response_headers = graph.has_providers(Response as usize, Headers as usize);
+        let do_response_body = graph.has_providers(Response as usize, Body as usize);
 
         Some(Box::new(DataKitFilter {
             config,

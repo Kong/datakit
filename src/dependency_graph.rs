@@ -122,14 +122,12 @@ impl DependencyGraph {
         self.add_provider(dn, dp, (sn, sp))
     }
 
-    pub fn has_dependents(&self, node: &str, port: &str) -> bool {
-        let (n, p) = find(node, port, &self.node_names, &self.output_names);
-        !self.dependents[n][p].is_empty()
+    pub fn has_dependents(&self, node: usize, port: usize) -> bool {
+        !self.dependents[node][port].is_empty()
     }
 
-    pub fn has_providers(&self, node: &str, port: &str) -> bool {
-        let (n, p) = find(node, port, &self.node_names, &self.input_names);
-        self.providers[n][p].is_some()
+    pub fn has_providers(&self, node: usize, port: usize) -> bool {
+        self.providers[node][port].is_some()
     }
 
     pub fn get_provider(&self, node: usize, port: usize) -> Option<(usize, usize)> {
