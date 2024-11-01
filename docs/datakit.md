@@ -39,7 +39,7 @@ The following node types are implemented:
 * `call`: an HTTP dispatch call
 * `jq`: execution of a JQ script
 * `template`: application of a raw string template
-* `response`: trigger a direct response, rather than forwarding a proxied response
+* `exit`: trigger an early exit that produces a direct response, rather than forwarding a proxied response
 
 ## Implicit nodes
 

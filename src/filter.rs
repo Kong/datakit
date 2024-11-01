@@ -460,7 +460,7 @@ proxy_wasm::main! {{
     nodes::register_node("implicit", Box::new(nodes::implicit::ImplicitFactory {}));
     nodes::register_node("template", Box::new(nodes::template::TemplateFactory {}));
     nodes::register_node("call", Box::new(nodes::call::CallFactory {}));
-    nodes::register_node("response", Box::new(nodes::response::ResponseFactory {}));
+    nodes::register_node("exit", Box::new(nodes::exit::ExitFactory {}));
     nodes::register_node("jq", Box::new(nodes::jq::JqFactory {}));
 
     proxy_wasm::set_log_level(LogLevel::Debug);

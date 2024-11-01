@@ -30,7 +30,7 @@ services:
                 "chuck_norris_fact": $chuck.value
               }
           - name: EXIT
+            type: exit
             inputs:
             - body: JOIN
-            type: response
             status: 200

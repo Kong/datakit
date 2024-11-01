@@ -12,15 +12,15 @@ use crate::payload;
 use crate::payload::Payload;
 
 #[derive(Debug)]
-pub struct ResponseConfig {
+pub struct ExitConfig {
     name: String,
     status: Option<u32>,
     warn_headers_sent: AtomicBool,
 }
 
-impl Clone for ResponseConfig {
-    fn clone(&self) -> ResponseConfig {
-        ResponseConfig {
+impl Clone for ExitConfig {
+    fn clone(&self) -> ExitConfig {
+        ExitConfig {
             name: self.name.clone(),
             status: self.status,
             warn_headers_sent: AtomicBool::new(self.warn_headers_sent.load(Relaxed)),
@@ -28,7 +28,7 @@ impl Clone for ResponseConfig {
     }
 }
 
-impl NodeConfig for ResponseConfig {
+impl NodeConfig for ExitConfig {
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -50,11 +50,11 @@ impl NodeConfig for ResponseConfig {
 }
 
 #[derive(Clone)]
-pub struct Response {
-    config: ResponseConfig,
+pub struct Exit {
+    config: ExitConfig,
 }
 
-fn warn_headers_sent(config: &ResponseConfig, set_headers: bool) {
+fn warn_headers_sent(config: &ExitConfig, set_headers: bool) {
     let name = &config.name;
     let set_status = config.status.is_some();
 
@@ -67,7 +67,7 @@ fn warn_headers_sent(config: &ResponseConfig, set_headers: bool) {
             "headers"
         };
         log::warn!(
-            "response: node '{name}' cannot set {what} when processing response body, \
+            "exit: node '{name}' cannot set {what} when processing response body, \
                    headers already sent; set 'warn_headers_sent' to false \
                    to silence this warning",
         );
@@ -75,7 +75,7 @@ fn warn_headers_sent(config: &ResponseConfig, set_headers: bool) {
     config.warn_headers_sent.store(false, Relaxed);
 }
 
-impl Node for Response {
+impl Node for Exit {
     fn run(&self, ctx: &dyn HttpContext, input: &Input) -> State {
         let config = &self.config;
         let body = input.data.first().unwrap_or(&None).as_deref();
@@ -111,9 +111,9 @@ impl Node for Response {
     }
 }
 
-pub struct ResponseFactory {}
+pub struct ExitFactory {}
 
-impl NodeFactory for ResponseFactory {
+impl NodeFactory for ExitFactory {
     fn default_input_ports(&self) -> PortConfig {
         PortConfig {
             defaults: PortConfig::names(&["body", "headers"]),
@@ -135,7 +135,7 @@ impl NodeFactory for ResponseFactory {
         _outputs: &[String],
         bt: &BTreeMap<String, Value>,
     ) -> Result<Box<dyn NodeConfig>, String> {
-        Ok(Box::new(ResponseConfig {
+        Ok(Box::new(ExitConfig {
             name: name.to_string(),
             status: get_config_value(bt, "status"),
             warn_headers_sent: AtomicBool::new(
@@ -145,8 +145,8 @@ impl NodeFactory for ResponseFactory {
     }
 
     fn new_node(&self, config: &dyn NodeConfig) -> Box<dyn Node> {
-        match config.as_any().downcast_ref::<ResponseConfig>() {
-            Some(cc) => Box::new(Response { config: cc.clone() }),
+        match config.as_any().downcast_ref::<ExitConfig>() {
+            Some(cc) => Box::new(Exit { config: cc.clone() }),
             None => panic!("incompatible NodeConfig"),
         }
     }
