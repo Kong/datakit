@@ -161,7 +161,7 @@ impl<'a> Deserialize<'a> for UserNodeConfig {
                         }
                         "inputs" => {
                             if let Ok(v) = map.next_value::<serde_json::Value>() {
-                                decode_links(&mut links, v, &mut named_ins, UserLink::new)
+                                read_links(&mut links, v, &mut named_ins, &UserLink::new)
                                     .map_err(Error::custom::<&str>)?;
                             }
                         }
@@ -173,7 +173,7 @@ impl<'a> Deserialize<'a> for UserNodeConfig {
                         }
                         "outputs" => {
                             if let Ok(v) = map.next_value::<serde_json::Value>() {
-                                decode_links(&mut links, v, &mut named_outs, UserLink::new_reverse)
+                                read_links(&mut links, v, &mut named_outs, &UserLink::new_reverse)
                                     .map_err(Error::custom::<&str>)?;
                             }
                         }
@@ -220,11 +220,11 @@ impl<'a> Deserialize<'a> for UserNodeConfig {
     }
 }
 
-fn decode_links(
+fn read_links(
     links: &mut Vec<UserLink>,
     value: Value,
     named: &mut Vec<String>,
-    ctor: impl Fn(Option<String>, Option<String>, Option<String>, Option<String>) -> UserLink,
+    ctor: &impl Fn(Option<String>, Option<String>, Option<String>, Option<String>) -> UserLink,
 ) -> Result<(), &'static str> {
     if value.is_object() {
         if let Ok(map) = serde_json::from_value::<Map<String, serde_json::Value>>(value) {
@@ -233,6 +233,8 @@ fn decode_links(
                 if let Ok(node_port) = serde_json::from_value::<String>(v) {
                     let (node, port) = parse_node_port(node_port);
                     links.push(ctor(node, port, None, Some(my_port)));
+                } else {
+                    return Err("invalid map value");
                 }
             }
         } else {
@@ -241,9 +243,13 @@ fn decode_links(
     } else if value.is_array() {
         if let Ok(vec) = serde_json::from_value::<Vec<serde_json::Value>>(value) {
             for v in vec {
-                if let Ok(node_port) = serde_json::from_value::<String>(v) {
+                if v.is_object() {
+                    read_links(links, v, named, ctor)?;
+                } else if let Ok(node_port) = serde_json::from_value::<String>(v) {
                     let (node, port) = parse_node_port(node_port);
                     links.push(ctor(node, port, None, None));
+                } else {
+                    return Err("invalid list value");
                 }
             }
         } else {
