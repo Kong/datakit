@@ -42,6 +42,15 @@ fn set_port(
     }
 }
 
+fn default_vec<T>(n: usize) -> Vec<T>
+where
+    T: Default,
+{
+    let mut vec = Vec::with_capacity(n);
+    vec.resize_with(n, Default::default);
+    vec
+}
+
 fn get_port(ports: &[Option<Payload>], port: usize) -> Option<&Payload> {
     match ports.get(port) {
         Some(Some(ref payload)) => Some(payload),
@@ -52,8 +61,7 @@ fn get_port(ports: &[Option<Payload>], port: usize) -> Option<&Payload> {
 impl Data {
     pub fn new(graph: DependencyGraph) -> Data {
         let n = graph.number_of_nodes();
-        let mut states = Vec::with_capacity(n);
-        states.resize_with(n, Default::default);
+        let states = default_vec(n);
         Data { graph, states }
     }
 
@@ -74,7 +82,7 @@ impl Data {
         match &mut self.states[node] {
             None => {
                 let mut ports: Vec<Option<Payload>> =
-                    Vec::with_capacity(self.graph.number_of_outputs(node));
+                    default_vec(self.graph.number_of_outputs(node));
                 ports[port] = Some(payload);
                 let state = State::Done(ports);
                 self.states[node] = Some(state);
