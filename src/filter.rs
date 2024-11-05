@@ -204,17 +204,28 @@ impl DataKitFilter {
         );
     }
 
+    fn set_implicit_data(&mut self, node: ImplicitNodeId, port: ImplicitPortId, payload: Payload) {
+        let r = self.data.fill_port(node.into(), port.into(), payload);
+        match r {
+            Ok(()) => {
+                if let Some(debug) = &mut self.debug {
+                    let name = self.data.get_node_name(node.into());
+                    if let Ok(state) = self.data.get_state(node.into()) {
+                        debug.set_data(name, state);
+                    }
+                }
+            }
+            Err(e) => panic!("error setting implicit node data: {e}"),
+        }
+    }
+
     fn set_headers_data(&mut self, node: ImplicitNodeId, vec: Vec<(String, String)>) {
         let payload = payload::from_pwm_headers(vec);
-        self.data
-            .fill_port(node.into(), Headers.into(), payload)
-            .unwrap();
+        self.set_implicit_data(node, Headers, payload);
     }
 
     fn set_body_data(&mut self, node: ImplicitNodeId, payload: Payload) {
-        self.data
-            .fill_port(node.into(), Body.into(), payload)
-            .unwrap();
+        self.set_implicit_data(node, Body, payload);
     }
 
     fn get_headers_data(&self, node: ImplicitNodeId) -> Option<&Payload> {
