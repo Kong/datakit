@@ -87,6 +87,13 @@ impl Data {
         }
     }
 
+    pub fn get_state(&self, node: usize) -> Result<&State, &'static str> {
+        match &self.states[node] {
+            None => Err("fill_port must have created a state"),
+            Some(state) => Ok(state),
+        }
+    }
+
     pub fn fetch_port(&self, node: usize, port: usize) -> Option<&Payload> {
         match self.graph.get_provider(node, port) {
             Some((n, p)) => match self.states.get(n).unwrap() {
