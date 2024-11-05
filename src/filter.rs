@@ -30,10 +30,22 @@ enum ImplicitNodeId {
     ServiceResponse = 3,
 }
 
+impl From<ImplicitNodeId> for usize {
+    fn from(n: ImplicitNodeId) -> Self {
+        n as usize
+    }
+}
+
 #[derive(Copy, Clone)]
 enum ImplicitPortId {
     Body = 0,
     Headers = 1,
+}
+
+impl From<ImplicitPortId> for usize {
+    fn from(p: ImplicitPortId) -> Self {
+        p as usize
+    }
 }
 
 lazy_static! {
@@ -92,17 +104,15 @@ impl RootContext for DataKitFilterRootContext {
         // to avoid cloning every time?
         let data = Data::new(graph.clone());
 
-        let do_request_headers = graph.has_dependents(Request as usize, Headers as usize);
-        let do_request_body = graph.has_dependents(Request as usize, Body as usize);
-        let do_service_request_headers =
-            graph.has_providers(ServiceRequest as usize, Headers as usize);
-        let do_service_request_body = graph.has_providers(ServiceRequest as usize, Body as usize);
+        let do_request_headers = graph.has_dependents(Request.into(), Headers.into());
+        let do_request_body = graph.has_dependents(Request.into(), Body.into());
+        let do_service_request_headers = graph.has_providers(ServiceRequest.into(), Headers.into());
+        let do_service_request_body = graph.has_providers(ServiceRequest.into(), Body.into());
         let do_service_response_headers =
-            graph.has_dependents(ServiceResponse as usize, Headers as usize);
-        let do_service_response_body =
-            graph.has_dependents(ServiceResponse as usize, Body as usize);
-        let do_response_headers = graph.has_providers(Response as usize, Headers as usize);
-        let do_response_body = graph.has_providers(Response as usize, Body as usize);
+            graph.has_dependents(ServiceResponse.into(), Headers.into());
+        let do_service_response_body = graph.has_dependents(ServiceResponse.into(), Body.into());
+        let do_response_headers = graph.has_providers(Response.into(), Headers.into());
+        let do_response_body = graph.has_providers(Response.into(), Body.into());
 
         Some(Box::new(DataKitFilter {
             config,
@@ -197,24 +207,22 @@ impl DataKitFilter {
     fn set_headers_data(&mut self, node: ImplicitNodeId, vec: Vec<(String, String)>) {
         let payload = payload::from_pwm_headers(vec);
         self.data
-            .fill_port(node as usize, ImplicitPortId::Headers as usize, payload)
+            .fill_port(node.into(), Headers.into(), payload)
             .unwrap();
     }
 
     fn set_body_data(&mut self, node: ImplicitNodeId, payload: Payload) {
         self.data
-            .fill_port(node as usize, ImplicitPortId::Body as usize, payload)
+            .fill_port(node.into(), Body.into(), payload)
             .unwrap();
     }
 
     fn get_headers_data(&self, node: ImplicitNodeId) -> Option<&Payload> {
-        self.data
-            .fetch_port(node as usize, ImplicitPortId::Headers as usize)
+        self.data.fetch_port(node.into(), Headers.into())
     }
 
     fn get_body_data(&self, node: ImplicitNodeId) -> Option<&Payload> {
-        self.data
-            .fetch_port(node as usize, ImplicitPortId::Body as usize)
+        self.data.fetch_port(node.into(), Body.into())
     }
 
     fn run_nodes(&mut self, phase: Phase) -> Action {
