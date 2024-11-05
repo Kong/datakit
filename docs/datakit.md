@@ -16,7 +16,7 @@ The data types are based on those of [serde-json], so representable value types 
 
 ## The execution model
 
-Nodes have can have input ports and output ports.
+Nodes can have input ports and output ports.
 Input ports consume data. Output ports produce data.
 
 You can link one node's output port to another node's input port.
