@@ -56,11 +56,6 @@ impl Node for Call {
             }
         };
 
-        let mut headers_vec = payload::to_pwm_headers(*headers);
-        headers_vec.push((":method", self.config.method.as_str()));
-        headers_vec.push((":path", call_url.path()));
-        headers_vec.push((":scheme", call_url.scheme()));
-
         let body_slice = match payload::to_pwm_body(*body) {
             Ok(slice) => slice,
             Err(e) => return Fail(vec![Some(Payload::Error(e))]),
@@ -73,6 +68,12 @@ impl Node for Call {
             Some(port) => format!("{host}:{port}"),
             None => host.to_owned(),
         };
+
+        let mut headers_vec = payload::to_pwm_headers(*headers);
+        headers_vec.push((":method", self.config.method.as_str()));
+        headers_vec.push((":path", call_url.path()));
+        headers_vec.push((":scheme", call_url.scheme()));
+        headers_vec.push((":authority", &host_port));
 
         let result = ctx.dispatch_http_call(
             &host_port,
@@ -87,7 +88,10 @@ impl Node for Call {
                 log::debug!("call: dispatch call id: {:?}", id);
                 Waiting(id)
             }
-            Err(status) => Fail(vec![Some(Payload::Error(format!("error: {:?}", status)))]),
+            Err(status) => {
+                log::debug!("call: dispatch call failed: {:?}", status);
+                Fail(vec![Some(Payload::Error(format!("error: {:?}", status)))])
+            }
         }
     }
 
