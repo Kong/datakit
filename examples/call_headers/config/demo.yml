@@ -1,0 +1,33 @@
+_format_version: "3.0"
+services:
+- url: http://127.0.0.1:8001
+  name: my-service
+  routes:
+  - name: my-route
+    paths:
+    - /
+    strip_path: true
+  filter_chains:
+    - filters:
+      - name: datakit
+        config:
+          debug: true
+          nodes:
+          - name: MY_HEADERS
+            type: jq
+            inputs:
+            - req: request.headers
+            jq: |
+              {
+                "X-My-Call-Header": $req.apikey // "default value"
+              }
+          - name: CALL
+            type: call
+            inputs:
+            - headers: MY_HEADERS
+            url: https://httpbin.konghq.com/anything
+          - name: EXIT
+            type: exit
+            inputs:
+            - body: CALL.body
+            status: 200
