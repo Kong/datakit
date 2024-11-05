@@ -51,13 +51,6 @@ where
     vec
 }
 
-fn get_port(ports: &[Option<Payload>], port: usize) -> Option<&Payload> {
-    match ports.get(port) {
-        Some(Some(ref payload)) => Some(payload),
-        _ => None,
-    }
-}
-
 impl Data {
     pub fn new(graph: DependencyGraph) -> Data {
         let n = graph.number_of_nodes();
@@ -98,8 +91,11 @@ impl Data {
         match self.graph.get_provider(node, port) {
             Some((n, p)) => match self.states.get(n).unwrap() {
                 Some(State::Waiting(_)) => None,
-                Some(State::Done(ports)) => get_port(ports, p),
-                Some(State::Fail(ports)) => get_port(ports, p),
+                Some(State::Done(ports)) | Some(State::Fail(ports)) => match ports.get(p) {
+                    Some(Some(ref payload)) => Some(payload),
+                    Some(None) => None,
+                    None => None,
+                },
                 None => None,
             },
             None => None,
