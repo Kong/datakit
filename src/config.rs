@@ -347,10 +347,6 @@ fn push_ports(ports: &mut Vec<Vec<String>>, pc: PortConfig, given: &Vec<String>)
     pc.user_defined_ports
 }
 
-fn has(xs: &[String], s: &str) -> bool {
-    xs.iter().any(|x| x == s)
-}
-
 fn resolve_port_names(
     link: &mut UserLink,
     outs: &mut Vec<String>,
@@ -363,7 +359,7 @@ fn resolve_port_names(
     let mut to_port = None;
     match &link.from.port {
         Some(port) => {
-            if !has(outs, port) {
+            if !outs.contains(port) {
                 if user_outs {
                     outs.push(port.into());
                 } else {
@@ -380,7 +376,7 @@ fn resolve_port_names(
                 let new_port = make_port_name(&link.to)?;
 
                 // otherwise the if outs.first() would have returned it
-                assert!(!has(outs, &new_port));
+                assert!(!outs.contains(&new_port));
 
                 from_port = Some(new_port.clone());
                 outs.push(new_port);
@@ -392,7 +388,7 @@ fn resolve_port_names(
 
     match &link.to.port {
         Some(port) => {
-            if !has(ins, port) {
+            if !ins.contains(port) {
                 if user_ins {
                     ins.push(port.into());
                 } else {
@@ -403,7 +399,7 @@ fn resolve_port_names(
         None => {
             if user_ins {
                 let new_port = make_port_name(&link.from)?;
-                if !has(outs, &new_port) {
+                if !outs.contains(&new_port) {
                     to_port = Some(new_port.clone());
                     ins.push(new_port);
                 } else {
@@ -490,7 +486,7 @@ fn convert_config(
         let nt: &str = &unc.desc.node_type;
 
         // at this point, node_names contains only the implicit entries
-        if has(&node_names, name) {
+        if node_names.iter().any(|n| n == name) {
             return Err(format!("cannot use reserved node name `{name}`"));
         }
 
