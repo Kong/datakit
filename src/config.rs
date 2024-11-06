@@ -4,7 +4,7 @@ use crate::DependencyGraph;
 use derivative::Derivative;
 use serde::de::{Error, MapAccess, Visitor};
 use serde::{Deserialize, Deserializer};
-use serde_json::{Map, Value};
+use serde_json::Value;
 use serde_json_wasm::de;
 use std::collections::BTreeMap;
 use std::fmt::{self, Formatter};
@@ -226,37 +226,40 @@ fn read_links(
     named: &mut Vec<String>,
     ctor: &impl Fn(Option<String>, Option<String>, Option<String>, Option<String>) -> UserLink,
 ) -> Result<(), &'static str> {
-    if value.is_object() {
-        if let Ok(map) = serde_json::from_value::<Map<String, serde_json::Value>>(value) {
+    match value {
+        Value::Object(map) => {
             for (my_port, v) in map {
                 named.push(my_port.clone());
-                if let Ok(node_port) = serde_json::from_value::<String>(v) {
-                    let (node, port) = parse_node_port(node_port);
-                    links.push(ctor(node, port, None, Some(my_port)));
-                } else {
+
+                let Value::String(node_port) = v else {
                     return Err("invalid map value");
-                }
+                };
+
+                let (node, port) = parse_node_port(node_port);
+                links.push(ctor(node, port, None, Some(my_port)));
             }
-        } else {
-            return Err("invalid map");
         }
-    } else if value.is_array() {
-        if let Ok(vec) = serde_json::from_value::<Vec<serde_json::Value>>(value) {
+
+        Value::Array(vec) => {
             for v in vec {
-                if v.is_object() {
-                    read_links(links, v, named, ctor)?;
-                } else if let Ok(node_port) = serde_json::from_value::<String>(v) {
-                    let (node, port) = parse_node_port(node_port);
-                    links.push(ctor(node, port, None, None));
-                } else {
-                    return Err("invalid list value");
+                match v {
+                    Value::Object(map) => {
+                        read_links(links, map.into(), named, ctor)?;
+                    }
+
+                    Value::String(node_port) => {
+                        let (node, port) = parse_node_port(node_port);
+                        links.push(ctor(node, port, None, None));
+                    }
+
+                    _ => {
+                        return Err("invalid list value");
+                    }
                 }
             }
-        } else {
-            return Err("invalid list");
         }
-    } else {
-        return Err("invalid object");
+
+        _ => return Err("invalid object"),
     }
     Ok(())
 }
