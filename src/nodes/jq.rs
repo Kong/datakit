@@ -211,11 +211,17 @@ fn sanitize_jq_inputs(inputs: &[String]) -> Vec<String> {
 
 impl NodeFactory for JqFactory {
     fn default_input_ports(&self) -> PortConfig {
-        Default::default()
+        PortConfig {
+            defaults: None,
+            user_defined_ports: true,
+        }
     }
 
     fn default_output_ports(&self) -> PortConfig {
-        Default::default()
+        PortConfig {
+            defaults: None,
+            user_defined_ports: true,
+        }
     }
 
     fn new_config(

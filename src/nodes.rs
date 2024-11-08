@@ -13,7 +13,7 @@ pub mod template;
 
 pub type NodeVec = Vec<Box<dyn Node>>;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct PortConfig {
     pub defaults: Option<Vec<String>>,
     pub user_defined_ports: bool,
@@ -23,14 +23,21 @@ impl PortConfig {
     fn names(list: &[&str]) -> Option<Vec<String>> {
         Some(list.iter().map(|&s| str::to_owned(s)).collect())
     }
-}
 
-impl Default for PortConfig {
-    fn default() -> Self {
-        PortConfig {
-            defaults: None,
-            user_defined_ports: true,
+    /// Combine defaults and user-given ports
+    /// into the final ordered list of ports.
+    pub fn into_port_list(self: PortConfig, given: &[String]) -> Vec<String> {
+        let mut list = self.defaults.unwrap_or_default();
+
+        if self.user_defined_ports {
+            for port in given {
+                if !list.iter().any(|p| p == port) {
+                    list.push(port.into());
+                }
+            }
         }
+
+        list
     }
 }
 
@@ -135,7 +142,8 @@ pub mod implicit {
 
     impl Node for Implicit {}
 
-    pub struct ImplicitFactory {}
+    pub struct SourceFactory {}
+    pub struct SinkFactory {}
 
     #[derive(Debug)]
     pub struct ImplicitConfig {}
@@ -145,13 +153,20 @@ pub mod implicit {
             self
         }
     }
-    impl NodeFactory for ImplicitFactory {
+
+    impl NodeFactory for SourceFactory {
         fn default_input_ports(&self) -> PortConfig {
-            Default::default()
+            PortConfig {
+                defaults: None,
+                user_defined_ports: false,
+            }
         }
 
         fn default_output_ports(&self) -> PortConfig {
-            Default::default()
+            PortConfig {
+                defaults: PortConfig::names(&["body", "headers"]),
+                user_defined_ports: false,
+            }
         }
 
         fn new_config(
@@ -164,11 +179,38 @@ pub mod implicit {
             Ok(Box::new(ImplicitConfig {}))
         }
 
-        fn new_node(&self, config: &dyn NodeConfig) -> Box<dyn Node> {
-            match config.as_any().downcast_ref::<ImplicitConfig>() {
-                Some(_cc) => Box::new(Implicit {}),
-                None => panic!("incompatible NodeConfig"),
+        fn new_node(&self, _config: &dyn NodeConfig) -> Box<dyn Node> {
+            Box::new(Implicit {})
+        }
+    }
+
+    impl NodeFactory for SinkFactory {
+        fn default_input_ports(&self) -> PortConfig {
+            PortConfig {
+                defaults: PortConfig::names(&["body", "headers", "query"]),
+                user_defined_ports: false,
             }
+        }
+
+        fn default_output_ports(&self) -> PortConfig {
+            PortConfig {
+                defaults: None,
+                user_defined_ports: false,
+            }
+        }
+
+        fn new_config(
+            &self,
+            _name: &str,
+            _inputs: &[String],
+            _outputs: &[String],
+            _bt: &BTreeMap<String, Value>,
+        ) -> Result<Box<dyn NodeConfig>, String> {
+            Ok(Box::new(ImplicitConfig {}))
+        }
+
+        fn new_node(&self, _config: &dyn NodeConfig) -> Box<dyn Node> {
+            Box::new(Implicit {})
         }
     }
 }

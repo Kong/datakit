@@ -26,8 +26,8 @@ use crate::ImplicitPortId::*;
 enum ImplicitNodeId {
     Request = 0,
     ServiceRequest = 1,
-    Response = 2,
-    ServiceResponse = 3,
+    ServiceResponse = 2,
+    Response = 3,
 }
 
 impl From<ImplicitNodeId> for usize {
@@ -50,10 +50,10 @@ impl From<ImplicitPortId> for usize {
 
 lazy_static! {
     static ref IMPLICIT_NODES: Vec<ImplicitNode> = vec![
-        ImplicitNode::new("request", &[], &["body", "headers"]),
-        ImplicitNode::new("service_request", &["body", "headers"], &[]),
-        ImplicitNode::new("response", &["body", "headers"], &[]),
-        ImplicitNode::new("service_response", &[], &["body", "headers"]),
+        ImplicitNode::new("request", "source"),
+        ImplicitNode::new("service_request", "sink"),
+        ImplicitNode::new("service_response", "source"),
+        ImplicitNode::new("response", "sink"),
     ];
 }
 
@@ -106,11 +106,14 @@ impl RootContext for DataKitFilterRootContext {
 
         let do_request_headers = graph.has_dependents(Request.into(), Headers.into());
         let do_request_body = graph.has_dependents(Request.into(), Body.into());
+
         let do_service_request_headers = graph.has_providers(ServiceRequest.into(), Headers.into());
         let do_service_request_body = graph.has_providers(ServiceRequest.into(), Body.into());
+
         let do_service_response_headers =
             graph.has_dependents(ServiceResponse.into(), Headers.into());
         let do_service_response_body = graph.has_dependents(ServiceResponse.into(), Body.into());
+
         let do_response_headers = graph.has_providers(Response.into(), Headers.into());
         let do_response_body = graph.has_providers(Response.into(), Body.into());
 
@@ -476,7 +479,8 @@ impl HttpContext for DataKitFilter {
 }
 
 proxy_wasm::main! {{
-    nodes::register_node("implicit", Box::new(nodes::implicit::ImplicitFactory {}));
+    nodes::register_node("source", Box::new(nodes::implicit::SourceFactory {}));
+    nodes::register_node("sink", Box::new(nodes::implicit::SinkFactory {}));
     nodes::register_node("template", Box::new(nodes::template::TemplateFactory {}));
     nodes::register_node("call", Box::new(nodes::call::CallFactory {}));
     nodes::register_node("exit", Box::new(nodes::exit::ExitFactory {}));
@@ -489,3 +493,8 @@ proxy_wasm::main! {{
         })
     });
 }}
+
+// interesting test to try out:
+// multiple callouts at once with different settings: http 1.0, 1.1, chunked encoding, content-length
+
+// test with bad responses

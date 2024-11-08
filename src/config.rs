@@ -1,26 +1,25 @@
 use crate::nodes;
-use crate::nodes::{NodeConfig, NodeVec, PortConfig};
+use crate::nodes::{NodeConfig, NodeVec};
 use crate::DependencyGraph;
 use derivative::Derivative;
 use serde::de::{Error, MapAccess, Visitor};
 use serde::{Deserialize, Deserializer};
 use serde_json::Value;
 use serde_json_wasm::de;
+use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::fmt::{self, Formatter};
 
 pub struct ImplicitNode {
     name: String,
-    inputs: Vec<String>,
-    outputs: Vec<String>,
+    node_type: String,
 }
 
 impl ImplicitNode {
-    pub fn new(name: &str, inputs: &[&str], outputs: &[&str]) -> ImplicitNode {
+    pub fn new(name: &str, node_type: &str) -> ImplicitNode {
         ImplicitNode {
             name: name.into(),
-            inputs: inputs.iter().map(|s| s.to_string()).collect(),
-            outputs: outputs.iter().map(|s| s.to_string()).collect(),
+            node_type: node_type.into(),
         }
     }
 }
@@ -100,6 +99,112 @@ impl UserLink {
                 port: from_port,
             },
         }
+    }
+
+    fn accept_port_name(port: &String, ports: &mut Vec<String>, user: bool) -> bool {
+        if ports.contains(port) {
+            true
+        } else if user {
+            ports.push(port.into());
+            true
+        } else {
+            false
+        }
+    }
+
+    fn get_or_create_output(
+        np: &UserNodePort,
+        outs: &mut Vec<String>,
+        user: bool,
+    ) -> Result<String, String> {
+        // If out ports list has a first port declared
+        // (either explicitly or implicitly), use it
+        if let Some(&port) = outs.first().as_ref() {
+            Ok(port.into())
+        } else if user {
+            let new_port = make_port_name(np)?;
+
+            // otherwise the if outs.first() would have returned it
+            assert!(!outs.contains(&new_port));
+
+            outs.push(new_port.clone());
+            Ok(new_port)
+        } else {
+            Err("node in link has no output ports".into())
+        }
+    }
+
+    fn create_or_get_input(
+        np: &UserNodePort,
+        ins: &mut Vec<String>,
+        user: bool,
+        n: usize,
+    ) -> Result<String, String> {
+        if user {
+            let new_port = make_port_name(np)?;
+            if ins.contains(&new_port) {
+                return Err(format!("duplicated input port {new_port}"));
+            }
+            ins.push(new_port.clone());
+            Ok(new_port.clone())
+        } else if let Some(&port) = ins.get(n - 1).as_ref() {
+            Ok(port.into())
+        } else {
+            Err(format!(
+                "too many inputs declared (node type supports {} inputs)",
+                ins.len()
+            ))
+        }
+    }
+
+    fn resolve_port_names(
+        self: &mut UserLink,
+        src: &mut PortInfo,
+        dst: &mut PortInfo,
+        n_ins: usize,
+    ) -> Result<(), String> {
+        let mut from_port = None;
+        let mut to_port = None;
+
+        let outs = &mut src.outs;
+        let user_outs = src.user_outs;
+        let ins = &mut dst.ins;
+        let user_ins = dst.user_ins;
+
+        match &self.from.port {
+            Some(port) => {
+                if !Self::accept_port_name(port, outs, user_outs) {
+                    return Err(format!("invalid output port name {port}"));
+                }
+            }
+            None => {
+                from_port = Some(Self::get_or_create_output(&self.to, outs, user_outs)?);
+            }
+        }
+
+        match &self.to.port {
+            Some(port) => {
+                if !Self::accept_port_name(port, ins, user_ins) {
+                    return Err(format!("invalid input port name {port}"));
+                }
+            }
+            None => {
+                to_port = Some(Self::create_or_get_input(&self.from, ins, user_ins, n_ins)?);
+            }
+        }
+
+        // assign in the end, so that the input and output resolution
+        // are not affected by the order of links when calling make_port_name
+        if from_port.is_some() {
+            self.from.port = from_port;
+        }
+        if to_port.is_some() {
+            self.to.port = to_port;
+        }
+        assert!(self.from.port.is_some());
+        assert!(self.to.port.is_some());
+
+        Ok(())
     }
 }
 
@@ -290,6 +395,13 @@ pub struct Config {
     debug: bool,
 }
 
+struct PortInfo {
+    ins: Vec<String>,
+    outs: Vec<String>,
+    user_ins: bool,
+    user_outs: bool,
+}
+
 fn add_default_links(
     name: &str,
     n_inputs: usize,
@@ -331,105 +443,6 @@ fn add_default_links(
     }
 }
 
-fn push_ports(ports: &mut Vec<Vec<String>>, pc: PortConfig, given: &Vec<String>) -> bool {
-    let mut list = pc.defaults.unwrap_or_default();
-
-    if pc.user_defined_ports {
-        for port in given {
-            if !list.iter().any(|p| p == port) {
-                list.push(port.into());
-            }
-        }
-    }
-
-    ports.push(list);
-
-    pc.user_defined_ports
-}
-
-fn resolve_port_names(
-    link: &mut UserLink,
-    outs: &mut Vec<String>,
-    user_outs: bool,
-    ins: &mut Vec<String>,
-    user_ins: bool,
-    n_linked_inputs: usize,
-) -> Result<(), String> {
-    let mut from_port = None;
-    let mut to_port = None;
-    match &link.from.port {
-        Some(port) => {
-            if !outs.contains(port) {
-                if user_outs {
-                    outs.push(port.into());
-                } else {
-                    return Err(format!("invalid output port name {port}"));
-                }
-            }
-        }
-        None => {
-            // If out ports list has a first port declared (either explicitly
-            // or implicitly), use it
-            if let Some(&port) = outs.first().as_ref() {
-                from_port = Some(port.into());
-            } else if user_outs {
-                let new_port = make_port_name(&link.to)?;
-
-                // otherwise the if outs.first() would have returned it
-                assert!(!outs.contains(&new_port));
-
-                from_port = Some(new_port.clone());
-                outs.push(new_port);
-            } else {
-                return Err("node in link has no output ports".into());
-            }
-        }
-    }
-
-    match &link.to.port {
-        Some(port) => {
-            if !ins.contains(port) {
-                if user_ins {
-                    ins.push(port.into());
-                } else {
-                    return Err(format!("invalid input port name {port}"));
-                }
-            }
-        }
-        None => {
-            if user_ins {
-                let new_port = make_port_name(&link.from)?;
-                if !outs.contains(&new_port) {
-                    to_port = Some(new_port.clone());
-                    ins.push(new_port);
-                } else {
-                    return Err(format!("duplicated input port {new_port}"));
-                }
-            } else if let Some(&port) = ins.get(n_linked_inputs - 1).as_ref() {
-                to_port = Some(port.into());
-            } else {
-                let n = ins.len();
-                return Err(format!(
-                    "too many inputs declared (node type supports {n} inputs)"
-                ));
-            }
-        }
-    }
-
-    // assign in the end, so that the input and output resolution
-    // are not affected by the order of links when calling make_port_name
-    if from_port.is_some() {
-        link.from.port = from_port;
-    }
-    if to_port.is_some() {
-        link.to.port = to_port;
-    }
-    assert!(link.from.port.is_some());
-    assert!(link.to.port.is_some());
-
-    Ok(())
-}
-
 fn make_port_name(np: &UserNodePort) -> Result<String, String> {
     Ok(match (&np.node, &np.port) {
         (Some(n), Some(p)) => format!("{n}.{p}"),
@@ -450,144 +463,183 @@ fn get_link_str(o: &Option<String>, _name: &str) -> Result<String, String> {
         .cloned()
 }
 
-fn convert_config(
-    mut user_config: UserConfig,
-    implicits: &[ImplicitNode],
-) -> Result<Config, String> {
-    let p = implicits.len();
-    let n = user_config.nodes.len() + p;
-
-    let mut node_names: Vec<String> = Vec::with_capacity(n);
-    let mut in_ports = Vec::with_capacity(n);
-    let mut out_ports = Vec::with_capacity(n);
-    let mut user_def_ins = vec![true; n];
-    let mut user_def_outs = vec![true; n];
-    let mut node_list = Vec::with_capacity(n);
-
-    // This is performed in several loops to ensure that the resolution
-    // order for links does not depend on the order of the nodes given
-    // in the input file.
-
-    for (i, inode) in implicits.iter().enumerate() {
-        node_names.push(inode.name.clone());
-        in_ports.push(inode.inputs.clone());
-        out_ports.push(inode.outputs.clone());
-        user_def_ins[i] = false;
-        user_def_outs[i] = false;
-        node_list.push(NodeInfo {
-            name: inode.name.clone(),
-            node_type: "implicit".into(),
-            node_config: Box::new(nodes::implicit::ImplicitConfig {}),
-        });
-    }
-
-    for (i, unc) in user_config.nodes.iter().enumerate() {
-        let name: &str = &unc.desc.name;
-        let nt: &str = &unc.desc.node_type;
-
-        // at this point, node_names contains only the implicit entries
-        if node_names.iter().any(|n| n == name) {
-            return Err(format!("cannot use reserved node name `{name}`"));
-        }
-
-        if !nodes::is_valid_type(nt) {
-            return Err(format!("unknown node type `{nt}`"));
-        }
-
-        let ins = nodes::default_input_ports(nt).unwrap();
-        user_def_ins[i + p] = push_ports(&mut in_ports, ins, &unc.named_ins);
-
-        let outs = nodes::default_output_ports(nt).unwrap();
-        user_def_outs[i + p] = push_ports(&mut out_ports, outs, &unc.named_outs);
-    }
-
-    for unc in &user_config.nodes {
-        let name = &unc.desc.name;
-
-        if node_names.iter().any(|n| n == name) {
-            return Err(format!("multiple definitions of node `{name}`"));
-        }
-
-        node_names.push(name.into());
-    }
-
-    let mut linked_inputs = vec![0; n];
-    for unc in user_config.nodes.iter_mut() {
-        for link in &mut unc.links {
-            let s = node_position(&node_names, &link.from, &unc.desc)?;
-            let d = node_position(&node_names, &link.to, &unc.desc)?;
-            let outs = &mut out_ports[s];
-            let u_outs = user_def_outs[s];
-            let ins = &mut in_ports[d];
-            let u_ins = user_def_ins[d];
-
-            linked_inputs[d] += 1;
-
-            resolve_port_names(link, outs, u_outs, ins, u_ins, linked_inputs[d])
-                .map_err(|e| err_at_node(&unc.desc, &e))?;
+impl PortInfo {
+    fn new(node_type: &str, named_ins: &[String], named_outs: &[String]) -> Self {
+        let ins_pc = nodes::default_input_ports(node_type).unwrap();
+        let outs_pc = nodes::default_output_ports(node_type).unwrap();
+        PortInfo {
+            user_ins: ins_pc.user_defined_ports,
+            user_outs: outs_pc.user_defined_ports,
+            ins: ins_pc.into_port_list(named_ins),
+            outs: outs_pc.into_port_list(named_outs),
         }
     }
-
-    for (u, unc) in user_config.nodes.iter_mut().enumerate() {
-        let i = u + p;
-        let ins = &mut in_ports[i];
-        let outs = &mut out_ports[i];
-        let name = &unc.desc.name;
-        let desc = &unc.desc;
-        match nodes::new_config(&desc.node_type, &desc.name, ins, outs, &unc.bt) {
-            Ok(nc) => {
-                add_default_links(name, unc.n_inputs, unc.n_outputs, &mut unc.links, &*nc);
-
-                node_list.push(NodeInfo {
-                    name: name.to_string(),
-                    node_type: desc.node_type.to_string(),
-                    node_config: nc,
-                });
-            }
-            Err(err) => return Err(err),
-        };
-    }
-
-    let mut graph = DependencyGraph::new(node_names, in_ports, out_ports);
-
-    for unc in &user_config.nodes {
-        let name = &unc.desc.name;
-        for link in &unc.links {
-            graph.add(
-                &get_link_str(&link.from.node, name)?,
-                &get_link_str(&link.from.port, name)?,
-                &get_link_str(&link.to.node, name)?,
-                &get_link_str(&link.to.port, name)?,
-            )?;
-        }
-    }
-
-    Ok(Config {
-        n_nodes: n,
-        n_implicits: p,
-        node_list,
-        graph,
-        debug: user_config.debug,
-    })
 }
 
-fn node_position(
-    node_names: &[String],
-    np: &UserNodePort,
-    desc: &UserNodeDesc,
-) -> Result<usize, String> {
+fn node_position(node_names: &[String], np: &UserNodePort) -> Result<usize, String> {
     node_names
         .iter()
         .position(|name: &String| Some(name) == np.node.as_ref())
-        .ok_or_else(|| err_at_node(desc, &format!("unknown node in link: {}", np)))
+        .ok_or_else(|| format!("unknown node in link: {}", np))
+}
+
+fn get_source_dest_ports(
+    port_list: &mut [PortInfo],
+    s: usize,
+    d: usize,
+) -> Result<(&mut PortInfo, &mut PortInfo), &'static str> {
+    match s.cmp(&d) {
+        Ordering::Less => {
+            let (ss, ds) = port_list.split_at_mut(s + 1);
+            Ok((&mut ss[s], &mut ds[d - (s + 1)]))
+        }
+        Ordering::Greater => {
+            let (ds, ss) = port_list.split_at_mut(d + 1);
+            Ok((&mut ss[s - (d + 1)], &mut ds[d]))
+        }
+        Ordering::Equal => Err("node cannot connect to itself"),
+    }
+}
+
+fn fixup_missing_port_names(
+    unc: &mut UserNodeConfig,
+    node_names: &[String],
+    port_list: &mut [PortInfo],
+    linked_inputs: &mut [usize],
+) -> Result<(), String> {
+    for link in &mut unc.links {
+        let s = node_position(node_names, &link.from)?;
+        let d = node_position(node_names, &link.to)?;
+        let (src, dst) = get_source_dest_ports(port_list, s, d)?;
+
+        linked_inputs[d] += 1;
+
+        link.resolve_port_names(src, dst, linked_inputs[d])?;
+    }
+    Ok(())
+}
+
+fn make_node_info(unc: &mut UserNodeConfig, port_info: &PortInfo) -> Result<NodeInfo, String> {
+    let name = &unc.desc.name;
+    let node_type = &unc.desc.node_type;
+
+    let nc = nodes::new_config(node_type, name, &port_info.ins, &port_info.outs, &unc.bt)?;
+
+    add_default_links(name, unc.n_inputs, unc.n_outputs, &mut unc.links, &*nc);
+
+    Ok(NodeInfo {
+        name: name.to_string(),
+        node_type: node_type.to_string(),
+        node_config: nc,
+    })
+}
+
+fn into_name_lists(ports: Vec<PortInfo>) -> (Vec<Vec<String>>, Vec<Vec<String>>) {
+    let n = ports.len();
+    let mut input_names = Vec::with_capacity(n);
+    let mut output_names = Vec::with_capacity(n);
+    for pi in ports.into_iter() {
+        input_names.push(pi.ins);
+        output_names.push(pi.outs);
+    }
+    (input_names, output_names)
+}
+
+impl UserConfig {
+    fn into_config(mut self, implicits: &[ImplicitNode]) -> Result<Config, String> {
+        let p = implicits.len();
+        let n = self.nodes.len() + p;
+
+        let mut node_names: Vec<String> = Vec::with_capacity(n);
+        let mut nodes = Vec::with_capacity(n);
+        let mut ports = Vec::with_capacity(n);
+
+        // This is performed in several loops to ensure that the resolution
+        // order for links does not depend on the order of the nodes given
+        // in the input file.
+
+        for inode in implicits.iter() {
+            node_names.push(inode.name.clone());
+            nodes.push(NodeInfo {
+                name: inode.name.clone(),
+                node_type: inode.node_type.clone(),
+                node_config: Box::new(nodes::implicit::ImplicitConfig {}),
+            });
+            ports.push(PortInfo::new(&inode.node_type, &[], &[]));
+        }
+
+        for unc in &self.nodes {
+            let desc = &unc.desc;
+            let name = &desc.name;
+            let node_type = &desc.node_type;
+
+            // at this point, node_names contains only the implicit entries
+            if node_names.iter().any(|n| n == name) {
+                return Err(err_at_node(desc, "cannot use reserved node name"));
+            }
+
+            if !nodes::is_valid_type(node_type) {
+                return Err(err_at_node(desc, "unknown node type"));
+            }
+
+            ports.push(PortInfo::new(node_type, &unc.named_ins, &unc.named_outs));
+        }
+
+        for unc in &self.nodes {
+            let name = &unc.desc.name;
+
+            if node_names.contains(name) {
+                return Err(format!("multiple definitions of node `{name}`"));
+            }
+
+            node_names.push(name.into());
+        }
+
+        let mut linked_inputs = vec![0; node_names.len()];
+        for unc in self.nodes.iter_mut() {
+            fixup_missing_port_names(unc, &node_names, &mut ports, &mut linked_inputs)
+                .map_err(|e| err_at_node(&unc.desc, &e))?;
+        }
+
+        // Now that all user-given links are resolved,
+        // we can create the user-given nodes
+        // (which may add default links of their own into implicit nodes)
+        for (u, unc) in self.nodes.iter_mut().enumerate() {
+            nodes.push(make_node_info(unc, &ports[u + p]).map_err(|e| err_at_node(&unc.desc, &e))?);
+        }
+
+        let (input_names, output_names) = into_name_lists(ports);
+        let mut graph = DependencyGraph::new(node_names, input_names, output_names);
+
+        for unc in &self.nodes {
+            let name = &unc.desc.name;
+            for link in &unc.links {
+                graph.add(
+                    &get_link_str(&link.from.node, name)?,
+                    &get_link_str(&link.from.port, name)?,
+                    &get_link_str(&link.to.node, name)?,
+                    &get_link_str(&link.to.port, name)?,
+                )?;
+            }
+        }
+
+        Ok(Config {
+            n_nodes: n,
+            n_implicits: p,
+            node_list: nodes,
+            graph,
+            debug: self.debug,
+        })
+    }
 }
 
 impl Config {
     pub fn new(config_bytes: Vec<u8>, implicits: &[ImplicitNode]) -> Result<Config, String> {
         match de::from_slice::<UserConfig>(&config_bytes) {
-            Ok(user_config) => convert_config(user_config, implicits)
+            Ok(user_config) => user_config
+                .into_config(implicits)
                 .map_err(|err| format!("failed checking configuration: {err}")),
-            Err(err) => Err(format!("failed parsing configuration: {err}",)),
+            Err(err) => Err(format!("failed parsing configuration: {err}")),
         }
     }
 
@@ -823,7 +875,16 @@ mod test {
     }
 
     fn reject_config_with(cfg: &str, message: &str) {
-        let result = Config::new(cfg.as_bytes().to_vec(), &[]);
+        nodes::register_node("source", Box::new(nodes::implicit::SourceFactory {}));
+        nodes::register_node("sink", Box::new(nodes::implicit::SinkFactory {}));
+        let implicits = vec![
+            ImplicitNode::new("request", "source"),
+            ImplicitNode::new("service_request", "sink"),
+            ImplicitNode::new("service_response", "source"),
+            ImplicitNode::new("response", "sink"),
+        ];
+
+        let result = Config::new(cfg.as_bytes().to_vec(), &implicits);
 
         let err = result.unwrap_err();
         assert_eq!(err, message);
@@ -884,7 +945,42 @@ mod test {
                     }
                 ]
             }"#,
-            "failed checking configuration: unknown node type `INVALID`",
+            "failed checking configuration: in node `MY_NODE` of type `INVALID`: unknown node type",
+        )
+    }
+
+    #[test]
+    fn config_invalid_name() {
+        nodes::register_node("jq", Box::new(nodes::jq::JqFactory {}));
+        reject_config_with(
+            r#"{
+                "nodes": [
+                    {
+                        "name": "response",
+                        "type": "jq"
+                    }
+                ]
+            }"#,
+            "failed checking configuration: in node `response` of type `jq`: cannot use reserved node name",
+        )
+    }
+
+    #[test]
+    fn config_invalid_loop() {
+        nodes::register_node("jq", Box::new(nodes::jq::JqFactory {}));
+        reject_config_with(
+            r#"{
+                "nodes": [
+                    {
+                        "name": "MY_NODE",
+                        "type": "jq",
+                        "inputs": {
+                            "input": "MY_NODE"
+                        }
+                    }
+                ]
+            }"#,
+            "failed checking configuration: in node `MY_NODE` of type `jq`: node cannot connect to itself",
         )
     }
 
@@ -925,17 +1021,19 @@ mod test {
             }"#,
         );
 
+        nodes::register_node("source", Box::new(nodes::implicit::SourceFactory {}));
+        nodes::register_node("sink", Box::new(nodes::implicit::SinkFactory {}));
         nodes::register_node("call", Box::new(nodes::call::CallFactory {}));
         nodes::register_node("jq", Box::new(nodes::jq::JqFactory {}));
 
         let implicits = vec![
-            ImplicitNode::new("request", &[], &["body", "headers"]),
-            ImplicitNode::new("service_request", &["body", "headers"], &[]),
-            ImplicitNode::new("response", &["body", "headers"], &[]),
-            ImplicitNode::new("service_response", &[], &["body", "headers"]),
+            ImplicitNode::new("request", "source"),
+            ImplicitNode::new("service_request", "sink"),
+            ImplicitNode::new("service_response", "source"),
+            ImplicitNode::new("response", "sink"),
         ];
 
-        let config = convert_config(uc, &implicits).unwrap();
+        let config = uc.into_config(&implicits).unwrap();
         assert!(!config.debug);
         assert_eq!(config.n_nodes, 7);
         assert_eq!(config.n_implicits, 4);
@@ -944,22 +1042,22 @@ mod test {
             vec![
                 NodeInfo {
                     name: "request".into(),
-                    node_type: "implicit".into(),
+                    node_type: "source".into(),
                     node_config: Box::new(IgnoreConfig {}),
                 },
                 NodeInfo {
                     name: "service_request".into(),
-                    node_type: "implicit".into(),
-                    node_config: Box::new(IgnoreConfig {}),
-                },
-                NodeInfo {
-                    name: "response".into(),
-                    node_type: "implicit".into(),
+                    node_type: "sink".into(),
                     node_config: Box::new(IgnoreConfig {}),
                 },
                 NodeInfo {
                     name: "service_response".into(),
-                    node_type: "implicit".into(),
+                    node_type: "source".into(),
+                    node_config: Box::new(IgnoreConfig {}),
+                },
+                NodeInfo {
+                    name: "response".into(),
+                    node_type: "sink".into(),
                     node_config: Box::new(IgnoreConfig {}),
                 },
                 NodeInfo {
@@ -981,9 +1079,9 @@ mod test {
         );
         let input_lists: &[&[Option<(usize, usize)>]] = &[
             &[],
-            &[None, None],
-            &[None, None],
+            &[None, None, None],
             &[],
+            &[None, None, None],
             &[Some((0, 1))],
             &[Some((4, 0)), None, None],
             &[Some((5, 0)), Some((0, 0))],
@@ -997,8 +1095,8 @@ mod test {
         let output_lists: &[&[&[(usize, usize)]]] = &[
             &[&[(6, 1)], &[(4, 0)]],
             &[],
-            &[],
             &[&[], &[]],
+            &[],
             &[&[(5, 0)]],
             &[&[(6, 0)], &[]],
             &[],
