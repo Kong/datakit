@@ -98,7 +98,10 @@ pub struct TemplateFactory {}
 
 impl NodeFactory for TemplateFactory {
     fn default_input_ports(&self) -> PortConfig {
-        Default::default()
+        PortConfig {
+            defaults: None,
+            user_defined_ports: true,
+        }
     }
 
     fn default_output_ports(&self) -> PortConfig {
