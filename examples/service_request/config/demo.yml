@@ -32,7 +32,7 @@ services:
                 "X-Name": "{{ first.country }}"
               }
           - name: MY_BODY
-            type: template
+            type: handlebars
             content_type: text/plain
             inputs:
             - first: FIRST.body
