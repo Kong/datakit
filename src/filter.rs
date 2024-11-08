@@ -306,6 +306,30 @@ impl DataKitFilter {
         }
     }
 
+    fn set_content_headers(
+        &self,
+        node: ImplicitNodeId,
+        set_header: impl Fn(&DataKitFilter, &str, Option<&str>),
+    ) {
+        if let Some(payload) = self.get_body_data(node) {
+            if let Some(content_type) = payload.content_type() {
+                set_header(self, "Content-Type", Some(content_type));
+            }
+            if let Some(content_length) = payload.len().map(|n| n.to_string()) {
+                set_header(self, "Content-Length", Some(&content_length));
+            } else {
+                set_header(self, "Content-Length", Some("")); // FIXME: why doesn't None work?
+            }
+        }
+        set_header(self, "Content-Encoding", None);
+    }
+
+    fn prep_service_request_body(&mut self) {
+        if self.do_service_request_body {
+            self.set_content_headers(ServiceRequest, |s, k, v| s.set_http_request_header(k, v));
+        }
+    }
+
     fn set_service_request_body(&mut self) {
         if self.do_service_request_body {
             if let Some(payload) = self.get_body_data(ServiceRequest) {
@@ -357,7 +381,7 @@ impl Context for DataKitFilter {
         self.run_nodes(HttpCallResponse);
 
         self.set_service_request_headers();
-        // self.set_service_request_body();
+        self.prep_service_request_body();
 
         self.resume_http_request();
     }
@@ -380,8 +404,9 @@ impl HttpContext for DataKitFilter {
             && self.get_http_request_header("Transfer-Encoding").is_none()
         {
             self.set_service_request_headers();
-            // self.set_service_request_body();
         }
+
+        self.prep_service_request_body();
 
         action
     }
@@ -420,14 +445,7 @@ impl HttpContext for DataKitFilter {
         }
 
         if self.do_response_body {
-            if let Some(payload) = self.get_body_data(Response) {
-                let content_length = payload.len().map(|n| n.to_string());
-                self.set_http_response_header("Content-Length", content_length.as_deref());
-                self.set_http_response_header("Content-Type", payload.content_type());
-            } else {
-                self.set_http_response_header("Content-Length", None);
-            }
-            self.set_http_response_header("Content-Encoding", None);
+            self.set_content_headers(Response, |s, k, v| s.set_http_response_header(k, v));
         }
 
         if self.debug.is_some() {
