@@ -194,7 +194,7 @@ pub mod implicit {
 
         fn default_output_ports(&self) -> PortConfig {
             PortConfig {
-                defaults: None,
+                defaults: PortConfig::names(&["body", "headers"]),
                 user_defined_ports: false,
             }
         }

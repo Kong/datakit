@@ -80,6 +80,7 @@ message "Now let's send a request to see the filter in effect:"
 
 http :8000/
 http :8000/ apikey:mykey
+http :8000/ apikey:mykey x-datakit-debug-trace:1
 
 message "Finishing up!"
 
