@@ -37,8 +37,9 @@ executing.
 The following node types are implemented:
 
 * `call`: an HTTP dispatch call
-* `jq`: execution of a JQ script
-* `template`: application of a raw string template
+* `jq`: execution of a JQ script for processing JSON
+* `handlebars`: application of a Handlebars template on a raw string, useful for producing
+  arbitrary non-JSON content types.
 * `exit`: trigger an early exit that produces a direct response, rather than forwarding a proxied response
 
 ## Implicit nodes

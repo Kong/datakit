@@ -499,7 +499,7 @@ impl HttpContext for DataKitFilter {
 proxy_wasm::main! {{
     nodes::register_node("source", Box::new(nodes::implicit::SourceFactory {}));
     nodes::register_node("sink", Box::new(nodes::implicit::SinkFactory {}));
-    nodes::register_node("template", Box::new(nodes::template::TemplateFactory {}));
+    nodes::register_node("handlebars", Box::new(nodes::handlebars::HandlebarsFactory {}));
     nodes::register_node("call", Box::new(nodes::call::CallFactory {}));
     nodes::register_node("exit", Box::new(nodes::exit::ExitFactory {}));
     nodes::register_node("jq", Box::new(nodes::jq::JqFactory {}));

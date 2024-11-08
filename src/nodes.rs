@@ -8,8 +8,8 @@ use crate::data::{Input, State, State::*};
 
 pub mod call;
 pub mod exit;
+pub mod handlebars;
 pub mod jq;
-pub mod template;
 
 pub type NodeVec = Vec<Box<dyn Node>>;
 

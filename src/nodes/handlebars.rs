@@ -10,43 +10,40 @@ use crate::nodes::{Node, NodeConfig, NodeFactory, PortConfig};
 use crate::payload::Payload;
 
 #[derive(Clone, Debug)]
-pub struct TemplateConfig {
+pub struct HandlebarsConfig {
     template: String,
     content_type: String,
     inputs: Vec<String>,
 }
 
-impl NodeConfig for TemplateConfig {
+impl NodeConfig for HandlebarsConfig {
     fn as_any(&self) -> &dyn Any {
         self
     }
 }
 
 #[derive(Clone)]
-pub struct Template<'a> {
-    config: TemplateConfig,
+pub struct HandlebarsNode<'a> {
+    config: HandlebarsConfig,
     handlebars: Handlebars<'a>,
 }
 
-impl Template<'_> {
-    fn new(config: TemplateConfig) -> Self {
-        let mut hb = Handlebars::new();
+impl HandlebarsNode<'_> {
+    fn new(config: HandlebarsConfig) -> Self {
+        let mut handlebars = Handlebars::new();
 
-        match hb.register_template_string("template", &config.template) {
+        match handlebars.register_template_string("template", &config.template) {
             Ok(()) => {}
             Err(err) => {
-                log::error!("template: error registering template: {err}");
+                log::error!("handlebars: error registering template: {err}");
             }
         }
 
-        Template {
-            config,
-            handlebars: hb,
-        }
+        HandlebarsNode { config, handlebars }
     }
 }
 
-impl Node for Template<'_> {
+impl Node for HandlebarsNode<'_> {
     fn run(&self, _ctx: &dyn HttpContext, input: &Input) -> State {
         let mut vs = Vec::new();
         let mut data = BTreeMap::new();
@@ -64,7 +61,7 @@ impl Node for Template<'_> {
                             vs.push((input_name, v));
                         }
                         Err(err) => {
-                            log::error!("template: input string is not valid UTF-8: {err}");
+                            log::error!("handlebars: input string is not valid UTF-8: {err}");
                         }
                     };
                 }
@@ -88,15 +85,15 @@ impl Node for Template<'_> {
                 }
             }
             Err(err) => State::Fail(vec![Some(Payload::Error(format!(
-                "error rendering template: {err}"
+                "handlebars: error rendering template: {err}"
             )))]),
         }
     }
 }
 
-pub struct TemplateFactory {}
+pub struct HandlebarsFactory {}
 
-impl NodeFactory for TemplateFactory {
+impl NodeFactory for HandlebarsFactory {
     fn default_input_ports(&self) -> PortConfig {
         PortConfig {
             defaults: None,
@@ -118,7 +115,7 @@ impl NodeFactory for TemplateFactory {
         _outputs: &[String],
         bt: &BTreeMap<String, Value>,
     ) -> Result<Box<dyn NodeConfig>, String> {
-        Ok(Box::new(TemplateConfig {
+        Ok(Box::new(HandlebarsConfig {
             inputs: inputs.to_vec(),
             template: get_config_value(bt, "template").unwrap_or_else(|| String::from("")),
             content_type: get_config_value(bt, "content_type")
@@ -127,8 +124,8 @@ impl NodeFactory for TemplateFactory {
     }
 
     fn new_node(&self, config: &dyn NodeConfig) -> Box<dyn Node> {
-        match config.as_any().downcast_ref::<TemplateConfig>() {
-            Some(cc) => Box::new(Template::new(cc.clone())),
+        match config.as_any().downcast_ref::<HandlebarsConfig>() {
+            Some(cc) => Box::new(HandlebarsNode::new(cc.clone())),
             None => panic!("incompatible NodeConfig"),
         }
     }
