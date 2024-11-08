@@ -36,16 +36,109 @@ executing.
 
 The following node types are implemented:
 
-* `call`: an HTTP dispatch call
-* `jq`: execution of a JQ script for processing JSON
-* `handlebars`: application of a Handlebars template on a raw string, useful for producing
-  arbitrary non-JSON content types.
-* `exit`: trigger an early exit that produces a direct response, rather than forwarding a proxied response
+**Node type**        | **Input ports**   | **Output ports**  |  **Supported attributes**
+--------------------:|:-----------------:|:-----------------:|:-----------------------------
+`call                | `body`, `headers` | `body`, `headers` | `url`, `method`, `timeout`
+`jq`                 | user-defined      | user-defined      | `jq`
+`handlebars`         | user-defined      | `output`          | `template`, `content_type`
+`exit`               | `body`, `headers` |                   | `status`
+
+### `call` node type
+
+An HTTP dispatch call.
+
+#### Input ports:
+
+* `body`: body to use in the dispatch request.
+* `headers`: headers to use in the dispatch request.
+
+#### Output ports:
+
+* `body`: body returned as the dispatch response.
+* `headers`: headers returned as the dispatch response.
+
+#### Supported attributes:
+
+* `url`: the URL to use when dispatching.
+* `method`: the HTTP method (default is `GET`).
+* `timeout`: the dispatch timeout, in seconds (default is 60).
+
+### `jq` node type
+
+Execution of a JQ script for processing JSON. The JQ script is processed
+using the [jaq] implementation of the JQ language.
+
+#### Input ports:
+
+User-defined. Each input port declared by the user will correspond to a
+variable in the JQ execution context. A user can declare the name of the port
+explicitly, which is the name of the variable. If a port does not have a given
+name, it will get a default name based on the peer node and port to which it
+is connected, and the name will be normalized into a valid variable name (e.g.
+by replacing `.` to `_`).
+
+#### Output ports:
+
+User-defined. When the JQ script produces a JSON value, that is made available
+in the first output port of the node. If the JQ script produces multiple JSON
+values, each value will be routed to a separate output port.
+
+#### Supported attributes:
+
+* `jq`: the JQ script to execute when the node is triggered.
+
+### `handlebars` node type
+
+Application of a [Handlebars] template on a raw string, useful for producing
+arbitrary non-JSON content types.
+
+#### Input ports:
+
+User-defined. Each input port declared by the user will correspond to a
+variable in the Handlebars execution context. A user can declare the name of
+the port explicitly, which is the name of the variable. If a port does not
+have a given name, it will get a default name based on the peer node and port
+to which it is connected, and the name will be normalized into a valid
+variable name (e.g. by replacing `.` to `_`).
+
+#### Output ports:
+
+* `output`: the rendered template. The output payload will be in raw string
+  format, unless an alternative `content_type` triggers a conversion.
+
+#### Supported attributes:
+
+* `template`: the Handlebars template to apply when the node is triggered.
+* `content_type`: if set to a MIME type that matches one of DataKit's
+  supported payload types, such as `application/json`, the output payload will
+  be converted to that format, making its contents available for further
+  processing by other nodes (default is `text/plain`, which produces a raw
+  string).
+
+### `exit` node type
+
+Trigger an early exit that produces a direct response, rather than forwarding
+a proxied response.
+
+#### Input ports:
+
+* `body`: body to use in the early-exit response.
+* `headers`: headers to use in the early-exit response.
+
+#### Output ports:
+
+None.
+
+#### Supported attributes:
+
+* `status`: the HTTP status code to use in the early-exit response (default is
+  200).
 
 ## Implicit nodes
 
 DataKit defines a number of implicit nodes that can be used without being
-explicitly declared. These reserved node names cannot be used for user-defined nodes. These are:
+explicitly declared. These reserved node names cannot be used for user-defined
+nodes. These are:
 
 **Node**             | **Input ports**   | **Output ports**  |  **Description**
 --------------------:|:-----------------:|:-----------------:|:------------------
@@ -83,3 +176,5 @@ as normal. Any other value will enable debug tracing.
 ---
 
 [serde-json]: https://docs.rs/serde_json/latest/serde_json/
+[Handlebars]: https://docs.rs/handlebars/latest/handlebars/
+[jaq]: https://lib.rs/crates/jaq
