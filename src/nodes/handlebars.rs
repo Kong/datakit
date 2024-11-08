@@ -43,22 +43,27 @@ impl HandlebarsNode<'_> {
     }
 }
 
+fn sanitize_handlebars_variable(input: &str) -> String {
+    input.replace('.', "_")
+}
+
 impl Node for HandlebarsNode<'_> {
     fn run(&self, _ctx: &dyn HttpContext, input: &Input) -> State {
         let mut vs = Vec::new();
         let mut data = BTreeMap::new();
 
         for (input_name, input) in self.config.inputs.iter().zip(input.data.iter()) {
+            let var = sanitize_handlebars_variable(input_name);
             match input {
                 Some(Payload::Json(value)) => {
-                    data.insert(input_name, value);
+                    data.insert(var, value);
                 }
                 Some(Payload::Raw(vec_bytes)) => {
                     match std::str::from_utf8(vec_bytes) {
                         Ok(s) => {
                             let v = serde_json::to_value::<String>(s.into())
                                 .expect("valid UTF-8 string");
-                            vs.push((input_name, v));
+                            vs.push((var, v));
                         }
                         Err(err) => {
                             log::error!("handlebars: input string is not valid UTF-8: {err}");
@@ -66,14 +71,14 @@ impl Node for HandlebarsNode<'_> {
                     };
                 }
                 Some(Payload::Error(error)) => {
-                    vs.push((input_name, serde_json::json!(error)));
+                    vs.push((var, serde_json::json!(error)));
                 }
                 None => {}
             }
         }
 
-        for (input_name, v) in vs.iter() {
-            data.insert(input_name, v);
+        for (var, val) in vs.iter() {
+            data.insert(var.clone(), val);
         }
 
         match self.handlebars.render("template", &data) {
