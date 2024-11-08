@@ -119,7 +119,7 @@ impl NodeFactory for HandlebarsFactory {
             inputs: inputs.to_vec(),
             template: get_config_value(bt, "template").unwrap_or_else(|| String::from("")),
             content_type: get_config_value(bt, "content_type")
-                .unwrap_or_else(|| String::from("application/json")),
+                .unwrap_or_else(|| String::from("text/plain")),
         }))
     }
 
