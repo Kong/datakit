@@ -29,7 +29,7 @@ services:
               {
                 "X-Hello": "World",
                 "X-Foo": "Bar",
-                "X-Name": "{{ first.country }}"
+                "X-Country": $first.country
               }
           - name: MY_BODY
             type: handlebars
