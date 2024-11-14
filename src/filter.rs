@@ -503,6 +503,7 @@ proxy_wasm::main! {{
     nodes::register_node("call", Box::new(nodes::call::CallFactory {}));
     nodes::register_node("exit", Box::new(nodes::exit::ExitFactory {}));
     nodes::register_node("jq", Box::new(nodes::jq::JqFactory {}));
+    nodes::register_node("property", Box::new(nodes::property::PropertyFactory {}));
 
     proxy_wasm::set_log_level(LogLevel::Debug);
     proxy_wasm::set_root_context(|_| -> Box<dyn RootContext> {

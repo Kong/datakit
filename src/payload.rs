@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Payload {
     Raw(Vec<u8>),
     Json(serde_json::Value),
@@ -28,7 +28,7 @@ impl Payload {
                     Some(Payload::Raw(bytes))
                 }
             }
-            _ => None,
+            _ => Some(Payload::Raw(bytes)),
         }
     }
 
@@ -95,6 +95,10 @@ impl Payload {
                 vec![]
             }
         }
+    }
+
+    pub fn json_null() -> Self {
+        Self::Json(serde_json::Value::Null)
     }
 }
 

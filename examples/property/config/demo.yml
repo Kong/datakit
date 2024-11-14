@@ -1,0 +1,114 @@
+_format_version: "3.0"
+
+services:
+- name: demo
+  url: http://httpbin.konghq.com
+  routes:
+  - name: my-route
+    paths:
+    - /anything
+    strip_path: false
+    methods:
+    - GET
+    - POST
+    plugins:
+    - name: post-function
+      config:
+        access:
+        - |
+          local cjson = require("cjson")
+          kong.ctx.shared.from_lua = cjson.encode({
+            nested = {
+              message = "hello from lua land!",
+            },
+          })
+        header_filter:
+        - |
+          local cjson = require("cjson")
+          local res = cjson.decode(kong.ctx.shared.api_response)
+          kong.response.set_header("X-Lua-Plugin-Country", res.country)
+    filter_chains:
+    - filters:
+      - name: datakit
+        config:
+          debug: true
+          nodes:
+          #
+          # read "builtin" kong properties
+          #
+          - name: ROUTE_ID
+            type: property
+            property: kong.route_id
+
+          - name: SERVICE
+            type: property
+            property: kong.router.service
+            content_type: application/json
+
+          #
+          # read some properties set by a Lua plugin
+          #
+          # NOTE: these depend on the fact that they are being set during the
+          # access phase and because Lua plugins run before wasm filters
+          #
+          - name: LUA_PLAIN
+            type: property
+            property: kong.ctx.shared.from_lua
+
+          - name: LUA_JSON
+            type: property
+            property: kong.ctx.shared.from_lua
+            content_type: application/json
+
+          #
+          # make an external API call and stash the result in kong.ctx.shared
+          #
+          - name: API
+            type: call
+            url: https://api.zippopotam.us/br/93000-000
+
+          - name: API_BODY
+            type: property
+            property: kong.ctx.shared.api_response
+            content_type: application/json
+            inputs:
+              value: API.body
+
+
+          #
+          # fetch a property that we know does not exist
+          #
+          - name: UNSET_PROP
+            type: property
+            # should return `null`
+            property: kong.ctx.shared.nothing_here
+
+          #
+          # assemble a response
+          #
+          - name: BODY
+            type: jq
+            inputs:
+              # value is also fetched after being set
+              api_response: API_BODY
+              service: SERVICE
+              route_id: ROUTE_ID
+              lua_plain: LUA_PLAIN
+              lua_json: LUA_JSON
+              unset: UNSET_PROP
+            jq: |
+              {
+                api: $api_response,
+                service: $service,
+                route_id: $route_id,
+                lua: {
+                  plain: $lua_plain,
+                  json: $lua_json,
+                },
+                unset: $unset,
+              }
+
+          - name: exit
+            type: exit
+            inputs:
+              body: BODY

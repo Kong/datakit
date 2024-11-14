@@ -10,6 +10,7 @@ pub mod call;
 pub mod exit;
 pub mod handlebars;
 pub mod jq;
+pub mod property;
 
 pub type NodeVec = Vec<Box<dyn Node>>;
 

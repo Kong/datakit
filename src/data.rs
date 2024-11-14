@@ -16,7 +16,7 @@ pub struct Input<'a> {
     pub phase: Phase,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum State {
     Waiting(u32),
     Done(Vec<Option<Payload>>),
