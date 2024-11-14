@@ -5,6 +5,7 @@ use crate::payload::Payload;
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::HashMap;
+use std::time::{Duration, SystemTime};
 
 pub enum RunMode {
     Run,
@@ -21,6 +22,8 @@ struct RunOperation {
     node_name: String,
     node_type: String,
     action: RunMode,
+    at: Option<Duration>,
+    duration: Option<Duration>,
 }
 
 #[derive(Serialize)]
@@ -33,6 +36,7 @@ struct SetOperation {
     node_name: String,
     status: DataMode,
     values: Vec<PortValue>,
+    at: Option<Duration>,
 }
 
 enum Operation {
@@ -45,6 +49,8 @@ pub struct Debug {
     operations: Vec<Operation>,
     node_types: HashMap<String, String>,
     orig_response_body_content_type: Option<String>,
+    start_time: SystemTime,
+    node_starts: HashMap<String, SystemTime>,
 }
 
 impl State {
@@ -91,6 +97,8 @@ impl Debug {
             trace: false,
             operations: vec![],
             orig_response_body_content_type: None,
+            start_time: SystemTime::now(),
+            node_starts: HashMap::new(),
         }
     }
 
@@ -104,6 +112,7 @@ impl Debug {
                     State::Done(p) => payloads_to_values(p, "raw"),
                     State::Fail(p) => payloads_to_values(p, "fail"),
                 },
+                at: Some(self.start_time.elapsed().unwrap()),
             }));
         }
     }
@@ -112,10 +121,24 @@ impl Debug {
         if self.trace {
             let node_type = self.node_types.get(name).expect("node exists");
 
+            let mut at = None;
+            let mut duration = None;
+            match action {
+                RunMode::Run => {
+                    self.node_starts.insert(name.into(), SystemTime::now());
+                    at = Some(self.start_time.elapsed().unwrap());
+                }
+                RunMode::Resume => {
+                    duration = Some(self.node_starts.get(name).unwrap().elapsed().unwrap());
+                }
+            }
+
             self.operations.push(Operation::Run(RunOperation {
                 action,
                 node_name: name.to_string(),
                 node_type: node_type.to_string(),
+                at,
+                duration,
             }));
 
             self.set_data(name, state);
@@ -147,6 +170,10 @@ impl Debug {
             r#type: Option<&'a str>,
             #[serde(skip_serializing_if = "Option::is_none")]
             values: Option<&'a Vec<PortValue>>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            at: Option<f32>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            duration: Option<f32>,
         }
 
         let mut actions: Vec<TraceAction> = vec![];
@@ -161,6 +188,8 @@ impl Debug {
                     r#type: Some(&run.node_type),
                     name: &run.node_name,
                     values: None,
+                    at: run.at.map(|d| d.as_secs_f32()),
+                    duration: run.duration.map(|d| d.as_secs_f32()),
                 },
                 Operation::Set(set) => match set.status {
                     DataMode::Done => TraceAction {
@@ -168,18 +197,24 @@ impl Debug {
                         name: &set.node_name,
                         r#type: None,
                         values: Some(&set.values),
+                        at: set.at.map(|d| d.as_secs_f32()),
+                        duration: None,
                     },
                     DataMode::Waiting => TraceAction {
                         action: "wait",
                         name: &set.node_name,
                         r#type: None,
                         values: None,
+                        at: set.at.map(|d| d.as_secs_f32()),
+                        duration: None,
                     },
                     DataMode::Fail => TraceAction {
                         action: "fail",
                         name: &set.node_name,
                         r#type: None,
                         values: Some(&set.values),
+                        at: set.at.map(|d| d.as_secs_f32()),
+                        duration: None,
                     },
                 },
             });
