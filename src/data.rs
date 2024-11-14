@@ -33,7 +33,7 @@ fn set_port(
     port: usize,
     payload: Payload,
 ) -> Result<(), &'static str> {
-    match ports.get(port) {
+    match &ports[port] {
         Some(_) => Err("cannot overwrite a payload"),
         None => {
             ports[port] = Some(payload);
