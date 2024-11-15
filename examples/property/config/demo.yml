@@ -1,0 +1,59 @@
+_format_version: "3.0"
+
+services:
+- name: demo
+  url: http://httpbin.konghq.com
+  routes:
+  - name: my-route
+    paths:
+    - /anything
+    strip_path: false
+    methods:
+    - GET
+    - POST
+    filter_chains:
+    - filters:
+      - name: datakit
+        config:
+          debug: true
+          nodes:
+          # plain string value
+          - name: SERVICE_ID
+            type: property
+            property: kong.service_id
+
+          # JSON-encoded value
+          - name: SERVICE
+            type: property
+            property: kong.router.service
+            content_type: application/json
+
+          - name: API
+            type: call
+            url: https://api.zippopotam.us/br/93000-000
+
+          - name: API_BODY
+            type: property
+            property: kong.ctx.shared.api_response
+            content_type: application/json
+            inputs:
+              value: API.body
+
+          - name: BODY
+            type: jq
+            inputs:
+              # value is also fetched after being set
+              api_response: API_BODY
+              service: SERVICE
+              service_id: SERVICE_ID
+            jq: |
+              {
+                api: $api_response,
+                service: $service,
+                service_id: $service_id,
+              }
+
+          - name: exit
+            type: exit
+            inputs:
+              body: BODY
