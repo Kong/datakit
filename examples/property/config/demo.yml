@@ -17,35 +17,43 @@ services:
         config:
           debug: true
           nodes:
-          - name: FIRST
-            type: call
-            url: https://api.zippopotam.us/br/93000-000
-
+          # plain string value
           - name: SERVICE_ID
             type: property
             property: kong.service_id
 
-          - name: MY_HEADERS
+          # JSON-encoded value
+          - name: SERVICE
+            type: property
+            property: kong.router.service
+            content_type: application/json
+
+          - name: API
+            type: call
+            url: https://api.zippopotam.us/br/93000-000
+
+          - name: API_BODY
+            type: property
+            property: kong.ctx.shared.api_response
+            content_type: application/json
+            inputs:
+              value: API.body
+
+          - name: BODY
             type: jq
             inputs:
-            - first: FIRST.body
-            - service: SERVICE_ID
+              # value is also fetched after being set
+              api_response: API_BODY
+              service: SERVICE
+              service_id: SERVICE_ID
             jq: |
               {
-                "X-Hello": "World",
-                "X-Foo": "Bar",
-                "X-Name": $first.country,
-                "X-Kong-Service-Id": $service,
+                api: $api_response,
+                service: $service,
+                service_id: $service_id,
               }
-
-          - name: MY_BODY
-            type: jq
-            inputs:
-              first: FIRST.body
-            jq: $first
 
           - name: exit
             type: exit
             inputs:
-              body: MY_BODY
-              headers: MY_HEADERS
+              body: BODY

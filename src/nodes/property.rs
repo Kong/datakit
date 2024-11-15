@@ -12,12 +12,14 @@ use crate::payload::Payload;
 #[derive(Clone, Debug)]
 pub struct PropertyConfig {
     path: Vec<String>,
+    content_type: Option<String>,
 }
 
 impl PropertyConfig {
-    fn new(name: String) -> Self {
+    fn new(name: String, ct: Option<String>) -> Self {
         Self {
             path: name.split('.').map(|s| s.to_string()).collect(),
+            content_type: ct,
         }
     }
 
@@ -37,17 +39,27 @@ pub struct Property {
 }
 
 impl Node for Property {
-    fn run(&self, ctx: &dyn HttpContext, _input: &Input) -> State {
-        log::debug!("property: run");
+    fn run(&self, ctx: &dyn HttpContext, input: &Input) -> State {
+        // set the property first if we have an input
+        if let Some(Some(value)) = input.data.first() {
+            log::debug!("SET property {:?} => {:?}", self.config.path, value);
+            match (*value).clone().to_bytes() {
+                Ok(bytes) => ctx.set_property(self.config.to_path(), Some(bytes.as_slice())),
+                Err(e) => {
+                    return Fail(vec![Some(Payload::Error(e))]);
+                }
+            }
+        };
 
         Done(match ctx.get_property(self.config.to_path()) {
             Some(bytes) => {
-                log::info!("{:?} => {:?}", &self.config.path, bytes);
-                vec![Some(Payload::Raw(bytes))]
+                let payload = Payload::from_bytes(bytes, self.config.content_type.as_deref());
+                log::debug!("GET property {:?} => {:?}", &self.config.path, payload);
+                vec![payload]
             }
             None => {
-                log::info!("{:?} => None", &self.config.path);
-                vec![]
+                log::debug!("GET property {:?} => None", &self.config.path);
+                vec![Some(Payload::json_null())]
             }
         })
     }
@@ -76,10 +88,11 @@ impl NodeFactory for PropertyFactory {
         _outputs: &[String],
         bt: &BTreeMap<String, Value>,
     ) -> Result<Box<dyn NodeConfig>, String> {
-        let name = get_config_value::<String>(bt, "property")
-            .ok_or_else(|| "Missing `property` attribute".to_owned())?;
-
-        Ok(Box::new(PropertyConfig::new(name)))
+        Ok(Box::new(PropertyConfig::new(
+            get_config_value(bt, "property")
+                .ok_or_else(|| "Missing `property` attribute".to_owned())?,
+            get_config_value(bt, "content_type"),
+        )))
     }
 
     fn new_node(&self, config: &dyn NodeConfig) -> Box<dyn Node> {
