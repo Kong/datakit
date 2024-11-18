@@ -103,7 +103,7 @@ impl NodeFactory for PropertyFactory {
     }
 }
 
-/* TODO: see if we can use https://github.com/proxy-wasm/test-framework
+///* TODO: see if we can use https://github.com/proxy-wasm/test-framework
 #[cfg(test)]
 mod test {
     use proxy_wasm::types::Bytes;
@@ -155,9 +155,460 @@ mod test {
                 None => self.props.borrow_mut().remove(&path),
             };
         }
+
+        fn get_current_time(&self) -> std::time::SystemTime {
+            todo!("mock function")
+        }
+
+        fn get_shared_data(&self, _key: &str) -> (Option<Bytes>, Option<u32>) {
+            todo!("mock function")
+        }
+
+        fn set_shared_data(
+            &self,
+            _key: &str,
+            _value: Option<&[u8]>,
+            _cas: Option<u32>,
+        ) -> Result<(), proxy_wasm::types::Status> {
+            todo!("mock function")
+        }
+
+        fn register_shared_queue(&self, _name: &str) -> u32 {
+            todo!("mock function")
+        }
+
+        fn resolve_shared_queue(&self, _vm_id: &str, _name: &str) -> Option<u32> {
+            todo!("mock function")
+        }
+
+        fn dequeue_shared_queue(
+            &self,
+            _queue_id: u32,
+        ) -> Result<Option<Bytes>, proxy_wasm::types::Status> {
+            todo!("mock function")
+        }
+
+        fn enqueue_shared_queue(
+            &self,
+            _queue_id: u32,
+            _value: Option<&[u8]>,
+        ) -> Result<(), proxy_wasm::types::Status> {
+            todo!("mock function")
+        }
+
+        fn dispatch_http_call(
+            &self,
+            _upstream: &str,
+            _headers: Vec<(&str, &str)>,
+            _body: Option<&[u8]>,
+            _trailers: Vec<(&str, &str)>,
+            _timeout: std::time::Duration,
+        ) -> Result<u32, proxy_wasm::types::Status> {
+            todo!("mock function")
+        }
+
+        fn on_http_call_response(
+            &mut self,
+            _token_id: u32,
+            _num_headers: usize,
+            _body_size: usize,
+            _num_trailers: usize,
+        ) {
+        }
+
+        fn get_http_call_response_headers(&self) -> Vec<(String, String)> {
+            todo!("mock function")
+        }
+
+        fn get_http_call_response_headers_bytes(&self) -> Vec<(String, Bytes)> {
+            todo!("mock function")
+        }
+
+        fn get_http_call_response_header(&self, _name: &str) -> Option<String> {
+            todo!("mock function")
+        }
+
+        fn get_http_call_response_header_bytes(&self, _name: &str) -> Option<Bytes> {
+            todo!("mock function")
+        }
+
+        fn get_http_call_response_body(&self, _start: usize, _max_size: usize) -> Option<Bytes> {
+            todo!("mock function")
+        }
+
+        fn get_http_call_response_trailers(&self) -> Vec<(String, String)> {
+            todo!("mock function")
+        }
+
+        fn get_http_call_response_trailers_bytes(&self) -> Vec<(String, Bytes)> {
+            todo!("mock function")
+        }
+
+        fn get_http_call_response_trailer(&self, _name: &str) -> Option<String> {
+            todo!("mock function")
+        }
+
+        fn get_http_call_response_trailer_bytes(&self, _name: &str) -> Option<Bytes> {
+            todo!("mock function")
+        }
+
+        fn dispatch_grpc_call(
+            &self,
+            _upstream_name: &str,
+            _service_name: &str,
+            _method_name: &str,
+            _initial_metadata: Vec<(&str, &[u8])>,
+            _message: Option<&[u8]>,
+            _timeout: std::time::Duration,
+        ) -> Result<u32, proxy_wasm::types::Status> {
+            todo!("mock function")
+        }
+
+        fn on_grpc_call_response(
+            &mut self,
+            _token_id: u32,
+            _status_code: u32,
+            _response_size: usize,
+        ) {
+        }
+
+        fn get_grpc_call_response_body(&self, _start: usize, _max_size: usize) -> Option<Bytes> {
+            todo!("mock function")
+        }
+
+        fn cancel_grpc_call(&self, _token_id: u32) {
+            todo!("mock function")
+        }
+
+        fn open_grpc_stream(
+            &self,
+            _cluster_name: &str,
+            _service_name: &str,
+            _method_name: &str,
+            _initial_metadata: Vec<(&str, &[u8])>,
+        ) -> Result<u32, proxy_wasm::types::Status> {
+            todo!("mock function")
+        }
+
+        fn on_grpc_stream_initial_metadata(&mut self, _token_id: u32, _num_elements: u32) {}
+
+        fn get_grpc_stream_initial_metadata(&self) -> Vec<(String, Bytes)> {
+            todo!("mock function")
+        }
+
+        fn get_grpc_stream_initial_metadata_value(&self, _name: &str) -> Option<Bytes> {
+            todo!("mock function")
+        }
+
+        fn send_grpc_stream_message(
+            &self,
+            _token_id: u32,
+            _message: Option<&[u8]>,
+            _end_stream: bool,
+        ) {
+            todo!("mock function")
+        }
+
+        fn on_grpc_stream_message(&mut self, _token_id: u32, _message_size: usize) {}
+
+        fn get_grpc_stream_message(&mut self, _start: usize, _max_size: usize) -> Option<Bytes> {
+            todo!("mock function")
+        }
+
+        fn on_grpc_stream_trailing_metadata(&mut self, _token_id: u32, _num_elements: u32) {}
+
+        fn get_grpc_stream_trailing_metadata(&self) -> Vec<(String, Bytes)> {
+            todo!("mock function")
+        }
+
+        fn get_grpc_stream_trailing_metadata_value(&self, _name: &str) -> Option<Bytes> {
+            todo!("mock function")
+        }
+
+        fn cancel_grpc_stream(&self, _token_id: u32) {
+            todo!("mock function")
+        }
+
+        fn close_grpc_stream(&self, _token_id: u32) {
+            todo!("mock function")
+        }
+
+        fn on_grpc_stream_close(&mut self, _token_id: u32, _status_code: u32) {}
+
+        fn get_grpc_status(&self) -> (u32, Option<String>) {
+            todo!("mock function")
+        }
+
+        fn call_foreign_function(
+            &self,
+            _function_name: &str,
+            _arguments: Option<&[u8]>,
+        ) -> Result<Option<Bytes>, proxy_wasm::types::Status> {
+            todo!("mock function")
+        }
+
+        fn on_done(&mut self) -> bool {
+            true
+        }
+
+        fn done(&self) {
+            todo!("mock function")
+        }
     }
 
-    impl HttpContext for Mock {}
+    impl HttpContext for Mock {
+        fn on_http_request_headers(
+            &mut self,
+            _num_headers: usize,
+            _end_of_stream: bool,
+        ) -> proxy_wasm::types::Action {
+            proxy_wasm::types::Action::Continue
+        }
+
+        fn get_http_request_headers(&self) -> Vec<(String, String)> {
+            todo!("mock function")
+        }
+
+        fn get_http_request_headers_bytes(&self) -> Vec<(String, Bytes)> {
+            todo!("mock function")
+        }
+
+        fn set_http_request_headers(&self, _headers: Vec<(&str, &str)>) {
+            todo!("mock function")
+        }
+
+        fn set_http_request_headers_bytes(&self, _headers: Vec<(&str, &[u8])>) {
+            todo!("mock function")
+        }
+
+        fn get_http_request_header(&self, _name: &str) -> Option<String> {
+            todo!("mock function")
+        }
+
+        fn get_http_request_header_bytes(&self, _name: &str) -> Option<Bytes> {
+            todo!("mock function")
+        }
+
+        fn set_http_request_header(&self, _name: &str, _value: Option<&str>) {
+            todo!("mock function")
+        }
+
+        fn set_http_request_header_bytes(&self, _name: &str, _value: Option<&[u8]>) {
+            todo!("mock function")
+        }
+
+        fn add_http_request_header(&self, _name: &str, _value: &str) {
+            todo!("mock function")
+        }
+
+        fn add_http_request_header_bytes(&self, _name: &str, _value: &[u8]) {
+            todo!("mock function")
+        }
+
+        fn on_http_request_body(
+            &mut self,
+            _body_size: usize,
+            _end_of_stream: bool,
+        ) -> proxy_wasm::types::Action {
+            proxy_wasm::types::Action::Continue
+        }
+
+        fn get_http_request_body(&self, _start: usize, _max_size: usize) -> Option<Bytes> {
+            todo!("mock function")
+        }
+
+        fn set_http_request_body(&self, _start: usize, _size: usize, _value: &[u8]) {
+            todo!("mock function")
+        }
+
+        fn on_http_request_trailers(&mut self, _num_trailers: usize) -> proxy_wasm::types::Action {
+            proxy_wasm::types::Action::Continue
+        }
+
+        fn get_http_request_trailers(&self) -> Vec<(String, String)> {
+            todo!("mock function")
+        }
+
+        fn get_http_request_trailers_bytes(&self) -> Vec<(String, Bytes)> {
+            todo!("mock function")
+        }
+
+        fn set_http_request_trailers(&self, _trailers: Vec<(&str, &str)>) {
+            todo!("mock function")
+        }
+
+        fn set_http_request_trailers_bytes(&self, _trailers: Vec<(&str, &[u8])>) {
+            todo!("mock function")
+        }
+
+        fn get_http_request_trailer(&self, _name: &str) -> Option<String> {
+            todo!("mock function")
+        }
+
+        fn get_http_request_trailer_bytes(&self, _name: &str) -> Option<Bytes> {
+            todo!("mock function")
+        }
+
+        fn set_http_request_trailer(&self, _name: &str, _value: Option<&str>) {
+            todo!("mock function")
+        }
+
+        fn set_http_request_trailer_bytes(&self, _name: &str, _value: Option<&[u8]>) {
+            todo!("mock function")
+        }
+
+        fn add_http_request_trailer(&self, _name: &str, _value: &str) {
+            todo!("mock function")
+        }
+
+        fn add_http_request_trailer_bytes(&self, _name: &str, _value: &[u8]) {
+            todo!("mock function")
+        }
+
+        fn resume_http_request(&self) {
+            todo!("mock function")
+        }
+
+        fn reset_http_request(&self) {
+            todo!("mock function")
+        }
+
+        fn on_http_response_headers(
+            &mut self,
+            _num_headers: usize,
+            _end_of_stream: bool,
+        ) -> proxy_wasm::types::Action {
+            proxy_wasm::types::Action::Continue
+        }
+
+        fn get_http_response_headers(&self) -> Vec<(String, String)> {
+            todo!("mock function")
+        }
+
+        fn get_http_response_headers_bytes(&self) -> Vec<(String, Bytes)> {
+            todo!("mock function")
+        }
+
+        fn set_http_response_headers(&self, _headers: Vec<(&str, &str)>) {
+            todo!("mock function")
+        }
+
+        fn set_http_response_headers_bytes(&self, _headers: Vec<(&str, &[u8])>) {
+            todo!("mock function")
+        }
+
+        fn get_http_response_header(&self, _name: &str) -> Option<String> {
+            todo!("mock function")
+        }
+
+        fn get_http_response_header_bytes(&self, _name: &str) -> Option<Bytes> {
+            todo!("mock function")
+        }
+
+        fn set_http_response_header(&self, _name: &str, _value: Option<&str>) {
+            todo!("mock function")
+        }
+
+        fn set_http_response_header_bytes(&self, _name: &str, _value: Option<&[u8]>) {
+            todo!("mock function")
+        }
+
+        fn add_http_response_header(&self, _name: &str, _value: &str) {
+            todo!("mock function")
+        }
+
+        fn add_http_response_header_bytes(&self, _name: &str, _value: &[u8]) {
+            todo!("mock function")
+        }
+
+        fn on_http_response_body(
+            &mut self,
+            _body_size: usize,
+            _end_of_stream: bool,
+        ) -> proxy_wasm::types::Action {
+            proxy_wasm::types::Action::Continue
+        }
+
+        fn get_http_response_body(&self, _start: usize, _max_size: usize) -> Option<Bytes> {
+            todo!("mock function")
+        }
+
+        fn set_http_response_body(&self, _start: usize, _size: usize, _value: &[u8]) {
+            todo!("mock function")
+        }
+
+        fn on_http_response_trailers(&mut self, _num_trailers: usize) -> proxy_wasm::types::Action {
+            proxy_wasm::types::Action::Continue
+        }
+
+        fn get_http_response_trailers(&self) -> Vec<(String, String)> {
+            todo!("mock function")
+        }
+
+        fn get_http_response_trailers_bytes(&self) -> Vec<(String, Bytes)> {
+            todo!("mock function")
+        }
+
+        fn set_http_response_trailers(&self, _trailers: Vec<(&str, &str)>) {
+            todo!("mock function")
+        }
+
+        fn set_http_response_trailers_bytes(&self, _trailers: Vec<(&str, &[u8])>) {
+            todo!("mock function")
+        }
+
+        fn get_http_response_trailer(&self, _name: &str) -> Option<String> {
+            todo!("mock function")
+        }
+
+        fn get_http_response_trailer_bytes(&self, _name: &str) -> Option<Bytes> {
+            todo!("mock function")
+        }
+
+        fn set_http_response_trailer(&self, _name: &str, _value: Option<&str>) {
+            todo!("mock function")
+        }
+
+        fn set_http_response_trailer_bytes(&self, _name: &str, _value: Option<&[u8]>) {
+            todo!("mock function")
+        }
+
+        fn add_http_response_trailer(&self, _name: &str, _value: &str) {
+            todo!("mock function")
+        }
+
+        fn add_http_response_trailer_bytes(&self, _name: &str, _value: &[u8]) {
+            todo!("mock function")
+        }
+
+        fn resume_http_response(&self) {
+            todo!("mock function")
+        }
+
+        fn reset_http_response(&self) {
+            todo!("mock function")
+        }
+
+        fn send_http_response(
+            &self,
+            _status_code: u32,
+            _headers: Vec<(&str, &str)>,
+            _body: Option<&[u8]>,
+        ) {
+            todo!("mock function")
+        }
+
+        fn send_grpc_response(
+            &self,
+            _grpc_status: proxy_wasm::types::GrpcStatusCode,
+            _grpc_status_message: Option<&str>,
+            _custom_metadata: Vec<(&str, &[u8])>,
+        ) {
+            todo!("mock function")
+        }
+
+        fn on_log(&mut self) {}
+    }
 
     #[test]
     fn get_property() {
@@ -202,4 +653,3 @@ mod test {
         assert_eq!(Some(value.into()), ctx.get(property));
     }
 }
-*/
