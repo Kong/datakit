@@ -1,0 +1,4 @@
+nodes:
+  # oops no `url`
+  - name: CALL
+    type: call

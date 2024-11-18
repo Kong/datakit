@@ -1,0 +1,4 @@
+nodes:
+  - name: EXIT
+    type: exit
+    status: "oops, not an integer"

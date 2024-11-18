@@ -1,0 +1,5 @@
+nodes:
+  - name: service_request
+    type: property
+    property: test
+    input: test

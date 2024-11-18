@@ -1,0 +1,18 @@
+nodes:
+  - name: API
+    type: call
+    url: http://httpbin.konghq.com/anything
+
+  - name: JQ_COMMON
+    type: jq
+    jq: '$api'
+    inputs:
+      api: API.body
+
+  - name: JQ_NO_FILTER
+    type: jq
+    input: JQ_COMMON
+
+  - name: JQ_NO_INPUT
+    type: jq
+    jq: '.'
