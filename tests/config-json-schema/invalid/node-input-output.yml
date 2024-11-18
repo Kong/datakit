@@ -1,0 +1,6 @@
+nodes:
+  - name: invalid-io
+    type: exit
+    inputs:
+      object:
+        key: value

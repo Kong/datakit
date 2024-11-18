@@ -1,0 +1,74 @@
+name: JSON schema tests
+
+on:
+  push:
+    branches:
+      - main
+
+  pull_request:
+    branches:
+      - '*'
+    paths:
+      - 'datakit.meta.json'
+      - '.github/workflows/json-schema-test.yml'
+      - 'tests/config-json-schema/**'
+
+  workflow_call:
+
+defaults:
+  run:
+    shell: bash
+
+# cancel previous runs if new commits are pushed to the PR, but run for each commit on master
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Extract schema from datakit.meta.json
+        shell: bash
+        run: |
+          jq '.config_schema' \
+            < ./datakit.meta.json \
+            > ./schema.json
+
+          echo "::group::postive-schema"
+          jq -S < ./schema.json
+          echo "::endgroup::"
+
+          jq '{
+              "$schema":     .config_schema["$schema"],
+              "not":         .config_schema,
+              "definitions": .config_schema.definitions,
+            }' \
+            < ./datakit.meta.json \
+            > negative.json
+
+          echo "::group::negative-schema"
+          jq -S < ./negative.json
+          echo "::endgroup::"
+
+      - name: Ensure the derived schema files are valid
+        uses: dsanders11/json-schema-validate-action@v1.2.0
+        with:
+          schema: tests/config-json-schema/draft-04.json
+          files: |
+            schema.json
+            negative.json
+
+      - name: Ensure valid configurations pass
+        uses: dsanders11/json-schema-validate-action@v1.2.0
+        with:
+          schema: schema.json
+          files: tests/config-json-schema/valid/*.yml
+
+      - name: Ensure invalid configurations pass the negative schema
+        uses: dsanders11/json-schema-validate-action@v1.2.0
+        with:
+          schema: negative.json
+          files: tests/config-json-schema/invalid/*.yml

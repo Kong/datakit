@@ -1,34 +1,151 @@
 {
-   "config_schema": {
-      "type": "object",
-      "required": ["nodes"],
-      "properties": {
-         "nodes": {
-            "type": "array",
-            "items": {
-               "type": "object",
-               "properties": {
-                  "type": { "type": "string" },
-                  "name": { "type": "string" },
-                  "input": { "type": "string" },
-                  "inputs": {
-                     "oneOf": [
-                        { "type": "array", "items": { "type": "string" } },
-                        { "type": "array", "items": { "type": "object", "additionalProperties": { "type": "string" } } },
-                        { "type": "object", "additionalProperties": { "type": "string" } }
-                     ]
-                  },
-                  "output": { "type": "string" },
-                  "outputs": {
-                     "oneOf": [
-                        { "type": "array", "items": { "type": "string" } },
-                        { "type": "array", "items": { "type": "object", "additionalProperties": { "type": "string" } } },
-                        { "type": "object", "additionalProperties": { "type": "string" } }
-                     ]
-                  }
-               }
-            }
-         }
+  "config_schema": {
+    "description": "DataKit proxy-wasm filter configuration schema",
+    "$schema": "http://json-schema.org/draft-04/schema#",
+    "type": "object",
+    "required": ["nodes"],
+    "additionalProperties": false,
+    "properties": {
+      "debug": { "type": "boolean" },
+      "nodes": {
+        "type": "array",
+        "minItems": 1,
+        "items": {
+          "type": "object",
+          "required": [ "type" ],
+          "properties": {
+            "type": { "$ref": "#/definitions/node-type" },
+            "name": { "$ref": "#/definitions/node-name" },
+            "input": { "$ref": "#/definitions/non-empty-string" },
+            "inputs": { "$ref": "#/definitions/node-ports" },
+            "output": { "$ref": "#/definitions/non-empty-string" },
+            "outputs": { "$ref": "#/definitions/node-ports" }
+          },
+          "allOf": [
+            { "$ref": "#/definitions/node-type-schemas" },
+            { "$ref": "#/definitions/mutually-exclusive-ports" }
+          ]
+        }
       }
-   }
+    },
+    "definitions": {
+      "node-type": {
+        "enum": [
+          "call",
+          "exit",
+          "handlebars",
+          "jq",
+          "property"
+        ]
+      },
+      "node-name": {
+        "allOf": [
+          { "$ref": "#/definitions/non-empty-string" },
+          {
+            "description": "cannot be a reserved node name",
+            "not": { "$ref": "#/definitions/reserved-node-names" }
+          }
+        ]
+      },
+      "node-ports": {
+        "oneOf": [
+          { "type": "array", "items": { "$ref": "#/definitions/non-empty-string" } },
+          { "type": "array", "items": { "$ref": "#/definitions/string-map" } },
+          { "$ref": "#/definitions/string-map" }
+        ]
+      },
+      "node-type-schemas": {
+        "oneOf": [
+          { "$ref": "#/definitions/nodes/call" },
+          { "$ref": "#/definitions/nodes/exit" },
+          { "$ref": "#/definitions/nodes/handlebars" },
+          { "$ref": "#/definitions/nodes/jq" },
+          { "$ref": "#/definitions/nodes/property" }
+        ]
+      },
+      "mutually-exclusive-ports": {
+        "not": {
+          "anyOf": [
+            {
+              "description": "input/inputs are mutually-exclusive",
+              "type": "object",
+              "required": [ "input", "inputs" ]
+            },
+            {
+              "description": "output/outputs are mutually-exclusive",
+              "type": "object",
+              "required": [ "output", "outputs" ]
+            }
+          ]
+        }
+      },
+      "nodes": {
+        "call": {
+          "type": "object",
+          "required": [ "url" ],
+          "properties": {
+            "type": { "enum": [ "call" ] },
+            "url": { "$ref": "#/definitions/non-empty-string" },
+            "method": { "$ref": "#/definitions/non-empty-string" },
+            "timeout": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "exit": {
+          "type": "object",
+          "properties": {
+            "type": { "enum": [ "exit" ] },
+            "status": {
+              "type": "integer",
+              "minimum": 100,
+              "maximum": 599
+            },
+            "warn_headers_sent": { "type": "boolean" }
+          }
+        },
+        "handlebars": {
+          "type": "object",
+          "properties": {
+            "type": { "enum": [ "handlebars" ] },
+            "template": { "$ref": "#/definitions/non-empty-string" },
+            "content_type": { "$ref": "#/definitions/non-empty-string" }
+          }
+        },
+        "jq": {
+          "type": "object",
+          "properties": {
+            "type": { "enum": [ "jq" ] },
+            "jq": { "$ref": "#/definitions/non-empty-string" }
+          }
+        },
+        "property": {
+          "type": "object",
+          "required": [ "property" ],
+          "properties": {
+            "type": { "enum": [ "property" ] },
+            "property": { "$ref": "#/definitions/non-empty-string" },
+            "content_type": { "$ref": "#/definitions/non-empty-string" }
+          }
+        }
+      },
+      "reserved-node-names": {
+        "enum": [
+          "request",
+          "service_request",
+          "service_response",
+          "response"
+        ]
+      },
+      "non-empty-string": {
+        "type": "string",
+        "minLength": 1
+      },
+      "string-map": {
+        "type": "object",
+        "additionalProperties": { "$ref": "#/definitions/non-empty-string" }
+      }
+    }
+  }
 }

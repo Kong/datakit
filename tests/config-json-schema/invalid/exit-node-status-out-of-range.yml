@@ -1,0 +1,3 @@
+nodes:
+  - type: exit
+    status: 99

@@ -1,0 +1,7 @@
+# `input` and `inputs` should be mutually-exclusive
+nodes:
+  - name: test
+    type: jq
+    input: A
+    inputs:
+      - B

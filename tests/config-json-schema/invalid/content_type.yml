@@ -1,0 +1,8 @@
+---
+nodes:
+  - name: set_prop
+    type: property
+    property: yup
+    content_type:
+      - 123
+      - this should have been a string

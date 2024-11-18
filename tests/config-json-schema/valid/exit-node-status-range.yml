@@ -1,0 +1,6 @@
+nodes:
+  - type: exit
+    status: 100
+
+  - type: exit
+    status: 599

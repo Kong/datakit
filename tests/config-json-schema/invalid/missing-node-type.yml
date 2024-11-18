@@ -1,0 +1,4 @@
+nodes:
+  - name: missing-type
+    property: test
+    input: test

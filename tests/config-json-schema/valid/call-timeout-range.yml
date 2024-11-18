@@ -1,0 +1,8 @@
+nodes:
+  - type: call
+    url: https://google.com/
+    timeout: 0
+
+  - type: call
+    url: https://google.com/
+    timeout: 99999

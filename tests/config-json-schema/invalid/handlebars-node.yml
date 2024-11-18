@@ -1,0 +1,5 @@
+nodes:
+  - name: TEMPLATE
+    type: handlebars
+    template:
+      - not a valid template
