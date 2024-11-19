@@ -2,6 +2,13 @@ name: setup
 
 description: Installs the rust toolchain.
 
+inputs:
+  wasm-opt:
+    description: "Build wasm-opt"
+    type: boolean
+    required: true
+    default: false
+
 runs:
   using: composite
   steps:
@@ -15,11 +22,16 @@ runs:
           ~/.rustup
           ~/.cargo
           target/
-        key: v3::rust-toolchain::${{ runner.os }}::${{ hashFiles('**/Cargo.lock', 'rust-toolchain.toml', '.github/actions/setup/action.yml') }}
+        key: v4::rust-toolchain::${{ runner.os }}::${{ hashFiles('**/Cargo.lock', 'rust-toolchain.toml', '.github/actions/setup/action.yml') }}::${{ inputs.wasm-opt }}
 
     - name: install rust toolchain
       if: steps.toolchain-cache.outputs.cache-hit != 'true'
       shell: bash
       run: |
         rustup update
+
+    - name: build wasm-opt
+      if: steps.toolchain-cache.outputs.cache-hit != 'true' && inputs.wasm-opt == true
+      shell: bash
+      run: |
         cargo install wasm-opt
