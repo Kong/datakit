@@ -45,9 +45,14 @@ impl Payload {
         }
     }
 
-    pub fn to_bytes(&self) -> Result<Vec<u8>, String> {
+    pub fn to_bytes(&self, content_type: Option<&str>) -> Result<Vec<u8>, String> {
+        let to_json = content_type.is_some_and(|ct| ct.contains(JSON_CONTENT_TYPE));
+
         match &self {
-            Payload::Json(serde_json::Value::String(string)) => Ok(string.clone().into_bytes()),
+            Payload::Json(serde_json::Value::String(string)) if !to_json => {
+                // do not serialize a JSON string unless explicitly asked
+                Ok(string.clone().into_bytes())
+            }
             Payload::Json(value) => Ok(value.to_string().into_bytes()),
             Payload::Raw(s) => Ok(s.clone()), // it would be nice to be able to avoid this copy
             Payload::Error(e) => Err(e.clone()),
@@ -140,7 +145,7 @@ pub fn to_pwm_headers(payload: Option<&Payload>) -> Vec<(&str, &str)> {
 /// `data::to_pwm_body(p).as_deref()`.
 pub fn to_pwm_body(payload: Option<&Payload>) -> Result<Option<Box<[u8]>>, String> {
     match payload {
-        Some(p) => match p.to_bytes() {
+        Some(p) => match p.to_bytes(None) {
             Ok(b) => Ok(Some(Vec::into_boxed_slice(b))),
             Err(e) => Err(e),
         },
@@ -166,4 +171,25 @@ pub fn to_json_error_body(message: &str, request_id: Option<Vec<u8>>) -> String 
     .ok()
     .map(|v| v.to_string())
     .expect("JSON error object")
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn to_bytes_json_string() {
+        let raw = "my string";
+        let encoded = "\"my string\"";
+
+        let payload = Payload::Json(serde_json::Value::String(raw.into()));
+
+        let payload_to_string = |ct: Option<&str>| -> String {
+            let bytes = payload.to_bytes(ct).expect("to_bytes() shouldn't error");
+            String::from_utf8(bytes).expect("bytes should be valid UTF8")
+        };
+
+        assert_eq!(raw, payload_to_string(None));
+        assert_eq!(encoded, payload_to_string(Some(JSON_CONTENT_TYPE)));
+    }
 }
