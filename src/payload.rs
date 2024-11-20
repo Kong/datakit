@@ -1,10 +1,11 @@
 use serde::{Deserialize, Serialize};
+use serde_json::Value as Json;
 use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Payload {
     Raw(Vec<u8>),
-    Json(serde_json::Value),
+    Json(Json),
     Error(String),
 }
 
@@ -34,7 +35,7 @@ impl Payload {
         }
     }
 
-    pub fn to_json(&self) -> Result<serde_json::Value, String> {
+    pub fn to_json(&self) -> Result<Json, String> {
         match &self {
             Payload::Json(value) => Ok(value.clone()),
             Payload::Raw(vec) => match std::str::from_utf8(vec) {
@@ -49,7 +50,7 @@ impl Payload {
         let to_json = content_type.is_some_and(|ct| ct.contains(JSON_CONTENT_TYPE));
 
         match &self {
-            Payload::Json(serde_json::Value::String(string)) if !to_json => {
+            Payload::Json(Json::String(string)) if !to_json => {
                 // do not serialize a JSON string unless explicitly asked
                 Ok(string.clone().into_bytes())
             }
@@ -71,19 +72,19 @@ impl Payload {
         match &self {
             Payload::Json(value) => {
                 let mut vec: Vec<(&str, &str)> = vec![];
-                if let serde_json::Value::Object(map) = value {
+                if let Json::Object(map) = value {
                     for (k, entry) in map {
                         match entry {
-                            serde_json::Value::Array(vs) => {
+                            Json::Array(vs) => {
                                 for v in vs {
-                                    if let serde_json::Value::String(s) = v {
+                                    if let Json::String(s) = v {
                                         vec.push((k, s));
                                     }
                                 }
                             }
 
                             // accept string values as well
-                            serde_json::Value::String(s) => {
+                            Json::String(s) => {
                                 vec.push((k, s));
                             }
 
@@ -103,7 +104,7 @@ impl Payload {
     }
 
     pub fn json_null() -> Self {
-        Self::Json(serde_json::Value::Null)
+        Self::Json(Json::Null)
     }
 }
 
@@ -182,7 +183,7 @@ mod test {
         let raw = "my string";
         let encoded = "\"my string\"";
 
-        let payload = Payload::Json(serde_json::Value::String(raw.into()));
+        let payload = Payload::Json(Json::String(raw.into()));
 
         let payload_to_string = |ct: Option<&str>| -> String {
             let bytes = payload.to_bytes(ct).expect("to_bytes() shouldn't error");
