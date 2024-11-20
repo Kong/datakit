@@ -16,10 +16,14 @@ pub struct PropertyConfig {
 }
 
 impl PropertyConfig {
-    fn new(name: String, ct: Option<String>) -> Self {
+    fn new<T, CT>(name: T, ct: Option<CT>) -> Self
+    where
+        T: AsRef<str>,
+        Option<CT>: Into<Option<String>>,
+    {
         Self {
-            path: name.split('.').map(|s| s.to_string()).collect(),
-            content_type: ct,
+            path: name.as_ref().split('.').map(|s| s.to_string()).collect(),
+            content_type: ct.into(),
         }
     }
 
@@ -34,8 +38,21 @@ impl NodeConfig for PropertyConfig {
     }
 }
 
+#[derive(Debug)]
 pub struct Property {
     config: PropertyConfig,
+}
+
+impl From<PropertyConfig> for Property {
+    fn from(value: PropertyConfig) -> Self {
+        Self { config: value }
+    }
+}
+
+impl From<&PropertyConfig> for Property {
+    fn from(value: &PropertyConfig) -> Self {
+        Self::from(value.clone())
+    }
 }
 
 impl Node for Property {
@@ -89,15 +106,15 @@ impl NodeFactory for PropertyFactory {
         bt: &BTreeMap<String, Value>,
     ) -> Result<Box<dyn NodeConfig>, String> {
         Ok(Box::new(PropertyConfig::new(
-            get_config_value(bt, "property")
+            get_config_value::<String>(bt, "property")
                 .ok_or_else(|| "Missing `property` attribute".to_owned())?,
-            get_config_value(bt, "content_type"),
+            get_config_value::<String>(bt, "content_type"),
         )))
     }
 
     fn new_node(&self, config: &dyn NodeConfig) -> Box<dyn Node> {
         match config.as_any().downcast_ref::<PropertyConfig>() {
-            Some(cc) => Box::new(Property { config: cc.clone() }),
+            Some(cc) => Box::new(Property::from(cc)),
             None => panic!("incompatible NodeConfig"),
         }
     }
