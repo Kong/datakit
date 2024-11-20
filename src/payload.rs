@@ -8,10 +8,12 @@ pub enum Payload {
     Error(String),
 }
 
+pub const JSON_CONTENT_TYPE: &str = "application/json";
+
 impl Payload {
     pub fn content_type(&self) -> Option<&str> {
         match &self {
-            Payload::Json(_) => Some("application/json"),
+            Payload::Json(_) => Some(JSON_CONTENT_TYPE),
             _ => None,
         }
     }
@@ -19,7 +21,7 @@ impl Payload {
     pub fn from_bytes(bytes: Vec<u8>, content_type: Option<&str>) -> Option<Payload> {
         match content_type {
             Some(ct) => {
-                if ct.contains("application/json") {
+                if ct.contains(JSON_CONTENT_TYPE) {
                     match serde_json::from_slice(&bytes) {
                         Ok(v) => Some(Payload::Json(v)),
                         Err(e) => Some(Payload::Error(e.to_string())),
@@ -96,6 +98,14 @@ impl Payload {
 
     pub fn json_null() -> Self {
         Self::Json(serde_json::Value::Null)
+    }
+
+    pub fn is_json(&self) -> bool {
+        match self {
+            Payload::Raw(_) => false,
+            Payload::Json(_) => true,
+            Payload::Error(_) => false,
+        }
     }
 }
 

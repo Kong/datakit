@@ -1,4 +1,3 @@
-use log;
 use proxy_wasm::traits::*;
 use serde_json::Value;
 use std::any::Any;
@@ -7,7 +6,7 @@ use std::collections::BTreeMap;
 use crate::config::get_config_value;
 use crate::data::{Input, State, State::*};
 use crate::nodes::{Node, NodeConfig, NodeFactory, PortConfig};
-use crate::payload::Payload;
+use crate::payload::{Payload, JSON_CONTENT_TYPE};
 
 #[derive(Clone, Debug)]
 pub struct PropertyConfig {
@@ -57,10 +56,15 @@ impl From<&PropertyConfig> for Property {
 
 impl Node for Property {
     fn run(&self, ctx: &dyn HttpContext, input: &Input) -> State {
+        let content_type = &mut self.config.content_type.as_deref();
+
         // set the property first if we have an input
-        if let Some(Some(value)) = input.data.first() {
-            log::debug!("SET property {:?} => {:?}", self.config.path, value);
-            match (*value).clone().to_bytes() {
+        if let Some(Some(payload)) = input.data.first() {
+            if payload.is_json() && content_type.is_none() {
+                *content_type = Some(JSON_CONTENT_TYPE);
+            }
+
+            match payload.to_bytes() {
                 Ok(bytes) => ctx.set_property(self.config.to_path(), Some(bytes.as_slice())),
                 Err(e) => {
                     return Fail(vec![Some(Payload::Error(e))]);
@@ -70,12 +74,10 @@ impl Node for Property {
 
         Done(match ctx.get_property(self.config.to_path()) {
             Some(bytes) => {
-                let payload = Payload::from_bytes(bytes, self.config.content_type.as_deref());
-                log::debug!("GET property {:?} => {:?}", &self.config.path, payload);
+                let payload = Payload::from_bytes(bytes, *content_type);
                 vec![payload]
             }
             None => {
-                log::debug!("GET property {:?} => None", &self.config.path);
                 vec![Some(Payload::json_null())]
             }
         })
