@@ -67,7 +67,7 @@ impl Node for Property {
                 *content_type = payload.content_type();
             }
 
-            match payload.to_bytes() {
+            match payload.to_bytes(*content_type) {
                 Ok(bytes) => ctx.set_property(self.config.to_path(), Some(bytes.as_slice())),
                 Err(e) => {
                     return Fail(vec![Some(Payload::Error(e))]);
