@@ -181,46 +181,216 @@ mod test {
     #[mock_proxy_wasm_http_context]
     impl HttpContext for Mock {}
 
+    macro_rules! input {
+        ($v:expr) => {
+            Input {
+                data: &[$v],
+                phase: crate::data::Phase::HttpRequestHeaders,
+            }
+        };
+        () => {
+            Input {
+                data: &[],
+                phase: crate::data::Phase::HttpRequestHeaders,
+            }
+        };
+    }
+
+    macro_rules! done {
+        ($v:expr) => {
+            State::Done(vec![$v])
+        };
+    }
+
+    macro_rules! fail {
+        ($v:expr) => {
+            State::Fail(vec![$v])
+        };
+    }
+
+    macro_rules! run {
+        ($node:expr, $ctx:expr, $input:expr) => {
+            Node::run($node, $ctx as &dyn HttpContext, $input)
+        };
+    }
+
+    macro_rules! node {
+        ($name:expr) => {
+            Property::from(PropertyConfig::new($name, None as Option<String>))
+        };
+        ($name:expr, $ct:expr) => {
+            Property::from(PropertyConfig::new($name, Some($ct.into())))
+        };
+    }
+
     #[test]
     fn get_property() {
-        let input = Input {
-            data: &[],
-            phase: crate::data::Phase::HttpRequestHeaders,
-        };
+        let property = "test.property";
+        let value = "test.value";
 
         let ctx = Mock::new();
-        let value = "test.value";
-        ctx.set("test.property", value);
+        ctx.set(property, value);
 
-        let prop = Property {
-            config: PropertyConfig::new("test.property".into(), None),
+        let node = node!(property);
+        let input = input!();
+
+        let state = run!(&node, &ctx, &input);
+        assert_eq!(done!(Some(Payload::Raw(value.into()))), state);
+    }
+
+    #[test]
+    fn get_property_not_exists() {
+        let ctx = Mock::new();
+
+        let node = node!("test.property");
+
+        let state = run!(&node, &ctx, &input!());
+        assert_eq!(done!(Some(Payload::json_null())), state);
+    }
+
+    #[test]
+    fn get_property_json() {
+        let property = "test.property";
+        let value = r#"{ "a": 1 }"#;
+
+        let payload =
+            Payload::from_bytes(value.into(), Some(JSON_CONTENT_TYPE)).expect("unreachable");
+
+        let ctx = Mock::new();
+        ctx.set(property, value);
+
+        let node = node!(property, JSON_CONTENT_TYPE);
+
+        let state = run!(&node, &ctx, &input!());
+        assert_eq!(done!(Some(payload)), state);
+    }
+
+    #[test]
+    fn get_property_json_invalid() {
+        let property = "test.property";
+        let value = r#"{ "a": }"#;
+
+        let ctx = Mock::new();
+        ctx.set(property, value);
+
+        let node = node!(property, JSON_CONTENT_TYPE);
+
+        let state = run!(&node, &ctx, &input!());
+        let State::Done(payloads) = state else {
+            panic!("expected State::Done(...)");
         };
 
-        let state = Node::run(&prop, &ctx as &dyn HttpContext, &input);
-        assert_eq!(State::Done(vec![Some(Payload::Raw(value.into()))]), state);
+        assert_eq!(1, payloads.len());
+
+        let Some(&Some(Payload::Error(_))) = payloads.first() else {
+            panic!("expected Payload::Error(...)");
+        };
     }
 
     #[test]
     fn set_property() {
         let property = "test.property";
         let value = "test.value";
-        let payload = Payload::Raw(value.into());
+        let ctx = Mock::new();
 
-        let input = Input {
-            data: &[Some(&payload)],
-            phase: crate::data::Phase::HttpRequestHeaders,
-        };
+        let node = node!(property);
+        let payload = Payload::Raw(value.into());
+        let input = input!(Some(&payload));
+
+        let state = run!(&node, &ctx, &input);
+        assert_eq!(done!(Some(payload)), state);
+        assert_eq!(Some(value.into()), ctx.get(property));
+    }
+
+    #[test]
+    fn set_property_from_json() {
+        let property = "test.property";
 
         let ctx = Mock::new();
-        assert_eq!(None, ctx.get(property));
 
-        let prop = Property {
-            config: PropertyConfig::new(property.into(), None),
+        let json = serde_json::json!({
+            "a": 1,
+        });
+
+        let payload = Payload::Json(json.clone());
+
+        let node = node!(property);
+        let state = run!(&node, &ctx, &input!(Some(&payload)));
+
+        assert_eq!(done!(Some(payload)), state);
+    }
+
+    #[test]
+    fn set_property_from_json_invalid() {
+        let property = "test.property";
+        let value = r#"{ "a": }"#;
+
+        let ctx = Mock::new();
+        ctx.set(property, value);
+
+        let node = node!(property, JSON_CONTENT_TYPE);
+
+        let state = run!(&node, &ctx, &input!());
+        let State::Done(payloads) = state else {
+            panic!("expected State::Done(...)");
         };
 
-        let state = Node::run(&prop, &ctx as &dyn HttpContext, &input);
-        assert_eq!(State::Done(vec![Some(Payload::Raw(value.into()))]), state);
+        assert_eq!(1, payloads.len());
 
-        assert_eq!(Some(value.into()), ctx.get(property));
+        let Some(&Some(Payload::Error(_))) = payloads.first() else {
+            panic!("expected Payload::Error(...)");
+        };
+    }
+
+    #[test]
+    fn set_property_from_json_plain() {
+        let property = "test.property";
+
+        let ctx = Mock::new();
+
+        let json = serde_json::json!({
+            "a": 1,
+        });
+
+        let raw = Payload::Raw(json.to_string().into());
+        let json = Payload::Json(json);
+
+        let node = node!(property, "text/plain");
+        let state = run!(&node, &ctx, &input!(Some(&json)));
+        assert_eq!(done!(Some(raw)), state);
+    }
+
+    #[test]
+    fn update_property() {
+        let property = "test.property";
+        let old = "old value";
+        let new = "new value";
+
+        let ctx = Mock::new();
+        ctx.set(property, old);
+
+        let payload = Payload::Raw(new.into());
+
+        let node = node!(property);
+        let input = input!(Some(&payload));
+
+        let state = run!(&node, &ctx, &input);
+        assert_eq!(done!(Some(Payload::Raw(new.into()))), state);
+        assert_eq!(Some(new.into()), ctx.get(property));
+    }
+
+    #[test]
+    fn set_property_from_error() {
+        let property = "test.property";
+        let err = "my error";
+
+        let ctx = Mock::new();
+
+        let payload = Payload::Error(err.into());
+
+        let node = node!(property);
+        let state = run!(&node, &ctx, &input!(Some(&payload)));
+
+        assert_eq!(fail!(Some(payload)), state);
     }
 }
