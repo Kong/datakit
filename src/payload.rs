@@ -47,6 +47,7 @@ impl Payload {
 
     pub fn to_bytes(&self) -> Result<Vec<u8>, String> {
         match &self {
+            Payload::Json(serde_json::Value::String(string)) => Ok(string.clone().into_bytes()),
             Payload::Json(value) => Ok(value.to_string().into_bytes()),
             Payload::Raw(s) => Ok(s.clone()), // it would be nice to be able to avoid this copy
             Payload::Error(e) => Err(e.clone()),
