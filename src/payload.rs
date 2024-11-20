@@ -99,14 +99,6 @@ impl Payload {
     pub fn json_null() -> Self {
         Self::Json(serde_json::Value::Null)
     }
-
-    pub fn is_json(&self) -> bool {
-        match self {
-            Payload::Raw(_) => false,
-            Payload::Json(_) => true,
-            Payload::Error(_) => false,
-        }
-    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
