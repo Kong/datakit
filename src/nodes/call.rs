@@ -33,32 +33,24 @@ pub struct Call {
     config: CallConfig,
 }
 
+fn fail(msg: String) -> State {
+    Fail(vec![Some(Payload::Error(msg))])
+}
+
 impl Node for Call {
     fn run(&self, ctx: &dyn HttpContext, input: &Input) -> State {
-        log::debug!("call: run");
-
         let body = input.data.first().unwrap_or(&None);
         let headers = input.data.get(1).unwrap_or(&None);
 
-        let call_url = match Url::parse(self.config.url.as_str()) {
-            Ok(u) => u,
-            Err(err) => {
-                log::error!("call: failed parsing URL from 'url' field: {err}");
-                return Done(vec![]);
-            }
-        };
+        let call_url = Url::parse(self.config.url.as_str()).unwrap();
 
-        let host = match call_url.host_str() {
-            Some(h) => h,
-            None => {
-                log::error!("call: failed getting host from URL");
-                return Done(vec![]);
-            }
+        let Some(host) = call_url.host_str() else {
+            return fail("call: failed getting host from URL".into());
         };
 
         let body_slice = match payload::to_pwm_body(*body) {
             Ok(slice) => slice,
-            Err(e) => return Fail(vec![Some(Payload::Error(e))]),
+            Err(e) => return fail(e),
         };
 
         let trailers = vec![];
@@ -90,7 +82,7 @@ impl Node for Call {
             }
             Err(status) => {
                 log::debug!("call: dispatch call failed: {:?}", status);
-                Fail(vec![Some(Payload::Error(format!("error: {:?}", status)))])
+                fail(format!("call error: {:?}", status))
             }
         }
     }
@@ -140,8 +132,16 @@ impl NodeFactory for CallFactory {
         _outputs: &[String],
         bt: &BTreeMap<String, Value>,
     ) -> Result<Box<dyn NodeConfig>, String> {
+        let Some(url) = get_config_value::<String>(bt, "url") else {
+            return Err("call: 'url' is a required attribute".into());
+        };
+
+        if Url::parse(&url).is_err() {
+            return Err("call: 'url' is not a valid URL".into());
+        }
+
         Ok(Box::new(CallConfig {
-            url: get_config_value(bt, "url").unwrap_or_else(|| String::from("")),
+            url,
             method: get_config_value(bt, "method").unwrap_or_else(|| String::from("GET")),
             timeout: get_config_value(bt, "timeout").unwrap_or(60),
         }))
