@@ -95,22 +95,31 @@ services:
             type: jq
             jq: '"my string"'
 
+          # encoded as `my string`
           - name: SET_MY_STRING_PLAIN
             type: property
             input: JSON_ENCODED_STRING
             property: kong.ctx.shared.my_string
 
+          # [JSON-]encoded as `"my string"`
           - name: SET_MY_STRING_ENCODED
             type: property
             input: JSON_ENCODED_STRING
             property: kong.ctx.shared.my_encoded_string
             content_type: application/json
 
-          - name: GET_STRING_RAW
+          # get `my string`, return `my string`
+          - name: GET_PLAIN_STRING
+            type: property
+            property: kong.ctx.shared.my_string
+
+          # get `"my string"`, return `"my string"`
+          - name: GET_JSON_STRING_ENCODED
             type: property
             property: kong.ctx.shared.my_encoded_string
 
-          - name: GET_STRING_DECODED
+          # get `"my string"`, decode, return `my string`
+          - name: GET_JSON_STRING_DECODED
             type: property
             property: kong.ctx.shared.my_encoded_string
             content_type: application/json
@@ -128,8 +137,9 @@ services:
               LUA_VALUE_ENCODED: LUA_VALUE_ENCODED
               LUA_VALUE_DECODED: LUA_VALUE_DECODED
               UNSET_PROP: UNSET_PROP
-              GET_STRING_RAW: GET_STRING_RAW
-              GET_STRING_DECODED: GET_STRING_DECODED
+              GET_PLAIN_STRING: GET_PLAIN_STRING
+              GET_JSON_STRING_ENCODED: GET_JSON_STRING_ENCODED
+              GET_JSON_STRING_DECODED: GET_JSON_STRING_DECODED
             jq: |
               {
                 "API.body": $API_body,
@@ -138,8 +148,9 @@ services:
                 LUA_VALUE_ENCODED: $LUA_VALUE_ENCODED,
                 LUA_VALUE_DECODED: $LUA_VALUE_DECODED,
                 UNSET_PROP: $UNSET_PROP,
-                GET_STRING_RAW: $GET_STRING_RAW,
-                GET_STRING_DECODED: $GET_STRING_DECODED,
+                GET_PLAIN_STRING: $GET_PLAIN_STRING,
+                GET_JSON_STRING_ENCODED: $GET_JSON_STRING_ENCODED,
+                GET_JSON_STRING_DECODED: $GET_JSON_STRING_DECODED,
               }
 
           - name: exit
