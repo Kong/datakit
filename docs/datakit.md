@@ -42,6 +42,7 @@ The following node types are implemented:
 `jq`                 | user-defined      | user-defined      | `jq`
 `handlebars`         | user-defined      | `output`          | `template`, `content_type`
 `exit`               | `body`, `headers` |                   | `status`
+`property`           | `value`           | `value`           | `property`, `content_type`
 
 ### `call` node type
 
@@ -133,6 +134,62 @@ None.
 
 * `status`: the HTTP status code to use in the early-exit response (default is
   200).
+
+
+### `property` node type
+
+Get/set Proxy-Wasm host properties.
+
+Whether a **get** or **set** operation is performed depends upon the node inputs:
+
+* If an input port is configured, **set** the property
+* If no input port is configured, **get** the property and map it to the output
+    port
+
+#### Examples
+
+Get the current value of `my.property`:
+
+```yaml
+- name: get_property
+  type: property
+  property: my.property
+```
+
+Set the value of `my.property` from `some_other_node.port`:
+
+```yaml
+- name: set_property
+  type: property
+  property: my.property
+  input: some_other_node.port
+```
+
+Get the value of `my.json-encoded.property` and decode it as JSON:
+
+```yaml
+- name: get_json_property
+  type: property
+  property: my.json-encoded.property
+  content_type: application/json
+```
+
+#### Input ports:
+
+* `value`: set the property to the value from this port
+
+#### Output ports:
+
+* `value`: the property value that was retrieved
+
+#### Supported attributes:
+
+* `property` (**required**): the name of the property
+* `content_type`: the MIME type of the property (example: `application/json`)
+    * **get**: controls how the value is _decoded_ after reading it.
+    * **set**: controls how the value is _encoded_ before writing it. This is
+        usually does not need to be specified, as DataKit can typically infer
+        the correct encoding from the input type.
 
 ## Implicit nodes
 
