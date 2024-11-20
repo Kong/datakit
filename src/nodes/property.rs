@@ -144,7 +144,6 @@ impl NodeFactory for PropertyFactory {
     }
 }
 
-///* TODO: see if we can use https://github.com/proxy-wasm/test-framework
 #[cfg(test)]
 mod test {
     use crate::payload::JSON_CONTENT_TYPE;
