@@ -105,6 +105,55 @@ impl Payload {
         }
     }
 
+    pub fn to_pwm_query(&self) -> String {
+        match &self {
+            Payload::Json(value) => {
+                let mut encoder = form_urlencoded::Serializer::new(String::new());
+                match value {
+                    serde_json::Value::Object(map) => {
+                        for (k, entry) in map {
+                            match entry {
+                                serde_json::Value::Array(vs) => {
+                                    for v in vs {
+                                        if let serde_json::Value::String(s) = v {
+                                            encoder.append_pair(k, s);
+                                        } else {
+                                            encoder.append_pair(k, &v.to_string());
+                                        }
+                                    }
+                                }
+                                serde_json::Value::String(s) => {
+                                    encoder.append_pair(k, s);
+                                }
+                                serde_json::Value::Null => {
+                                    encoder.append_key_only(k);
+                                }
+                                _ => {
+                                    encoder.append_pair(k, &entry.to_string());
+                                }
+                            }
+                        }
+                    }
+                    serde_json::Value::String(s) => {
+                        encoder.append_key_only(s);
+                    }
+                    _ => {
+                        encoder.append_key_only(&value.to_string());
+                    }
+                }
+                encoder.finish()
+            }
+            Payload::Raw(s) => form_urlencoded::byte_serialize(s)
+                .collect::<Vec<_>>()
+                .join(""),
+            Payload::Error(err) => {
+                // FIXME what is the best behavior here?
+                log::debug!("attempting to produce query from an error value: {err}");
+                "".into()
+            }
+        }
+    }
+
     pub fn json_null() -> Self {
         Self::Json(Json::Null)
     }

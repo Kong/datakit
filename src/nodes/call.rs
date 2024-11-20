@@ -37,10 +37,22 @@ fn fail(msg: String) -> State {
     Fail(vec![Some(Payload::Error(msg))])
 }
 
+fn path_with_query(call_url: &Url, query: &Option<&Payload>) -> String {
+    let p = call_url.path().to_owned();
+    match query {
+        Some(q) => p + "?" + &*q.to_pwm_query(),
+        None => match call_url.query() {
+            Some(cq) => p + "?" + cq,
+            None => p,
+        },
+    }
+}
+
 impl Node for Call {
     fn run(&self, ctx: &dyn HttpContext, input: &Input) -> State {
         let body = input.data.first().unwrap_or(&None);
         let headers = input.data.get(1).unwrap_or(&None);
+        let query = input.data.get(2).unwrap_or(&None);
 
         let call_url = Url::parse(self.config.url.as_str()).unwrap();
 
@@ -61,9 +73,11 @@ impl Node for Call {
             None => host.to_owned(),
         };
 
+        let path = path_with_query(&call_url, query);
+
         let mut headers_vec = payload::to_pwm_headers(*headers);
         headers_vec.push((":method", self.config.method.as_str()));
-        headers_vec.push((":path", call_url.path()));
+        headers_vec.push((":path", &path));
         headers_vec.push((":scheme", call_url.scheme()));
         headers_vec.push((":authority", &host_port));
 
