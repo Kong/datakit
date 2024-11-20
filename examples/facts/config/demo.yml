@@ -16,9 +16,11 @@ services:
           - name: CAT_FACT
             type: call
             url:  https://catfact.ninja/fact
+
           - name: CHUCK_NORRIS_FACT
             type: call
             url:  https://api.chucknorris.io/jokes/random
+
           - name: JOIN
             type: jq
             inputs:
@@ -29,6 +31,7 @@ services:
                 "cat_fact": $cat.fact,
                 "chuck_norris_fact": $chuck.value
               }
+
           - name: EXIT
             type: exit
             inputs:
