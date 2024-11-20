@@ -174,7 +174,8 @@ impl UserLink {
         match &self.from.port {
             Some(port) => {
                 if !Self::accept_port_name(port, outs, user_outs) {
-                    return Err(format!("invalid output port name {port}"));
+                    let node = self.from.node.as_ref().unwrap();
+                    return Err(format!("invalid output port name {node}.{port}"));
                 }
             }
             None => {
@@ -185,7 +186,8 @@ impl UserLink {
         match &self.to.port {
             Some(port) => {
                 if !Self::accept_port_name(port, ins, user_ins) {
-                    return Err(format!("invalid input port name {port}"));
+                    let node = self.to.node.as_ref().unwrap();
+                    return Err(format!("invalid input port name {node}.{port}"));
                 }
             }
             None => {
