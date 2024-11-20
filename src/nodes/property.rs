@@ -60,6 +60,9 @@ impl Node for Property {
 
         // set the property first if we have an input
         if let Some(Some(payload)) = input.data.first() {
+            #[cfg(debug_assertions)]
+            log::debug!("SET property {:?} => {:?}", self.config.path, payload);
+
             if payload.is_json() && content_type.is_none() {
                 *content_type = Some(JSON_CONTENT_TYPE);
             }
@@ -75,9 +78,16 @@ impl Node for Property {
         Done(match ctx.get_property(self.config.to_path()) {
             Some(bytes) => {
                 let payload = Payload::from_bytes(bytes, *content_type);
+
+                #[cfg(debug_assertions)]
+                log::debug!("GET property {:?} => {:?}", &self.config.path, payload);
+
                 vec![payload]
             }
             None => {
+                #[cfg(debug_assertions)]
+                log::debug!("GET property {:?} => None", &self.config.path);
+
                 vec![Some(Payload::json_null())]
             }
         })
