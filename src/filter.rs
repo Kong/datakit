@@ -333,7 +333,8 @@ impl DataKitFilter {
     fn set_service_request_body(&mut self) {
         if self.do_service_request_body {
             if let Some(payload) = self.get_body_data(ServiceRequest) {
-                if let Ok(bytes) = payload.to_bytes(None) {
+                let content_type = self.get_http_request_header("Content-Type");
+                if let Ok(bytes) = payload.to_bytes(content_type.as_deref()) {
                     self.set_http_request_body(0, bytes.len(), &bytes);
                 }
                 self.do_service_request_body = false;
@@ -473,7 +474,8 @@ impl HttpContext for DataKitFilter {
 
         if self.do_response_body {
             if let Some(payload) = self.get_body_data(Response) {
-                if let Ok(bytes) = payload.to_bytes(None) {
+                let content_type = self.get_http_response_header("Content-Type");
+                if let Ok(bytes) = payload.to_bytes(content_type.as_deref()) {
                     self.set_http_response_body(0, bytes.len(), &bytes);
                 } else {
                     self.set_http_response_body(0, 0, &[]);
