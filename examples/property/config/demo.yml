@@ -17,6 +17,7 @@ services:
         access:
         - |
           local cjson = require("cjson")
+
           kong.ctx.shared.from_lua = cjson.encode({
             nested = {
               message = "hello from lua land!",
@@ -25,8 +26,15 @@ services:
         header_filter:
         - |
           local cjson = require("cjson")
-          local res = cjson.decode(kong.ctx.shared.api_response)
+          local ctx = kong.ctx.shared
+
+          local api_response = ctx.api_response or "null"
+          local res = cjson.decode(api_response)
+
+          kong.response.set_header("X-Lua-Encoded-Object", api_response)
           kong.response.set_header("X-Lua-Plugin-Country", res.country)
+          kong.response.set_header("X-Lua-Plugin-My-String", ctx.my_string)
+          kong.response.set_header("X-Lua-Plugin-My-Encoded-String", ctx.my_encoded_string)
     filter_chains:
     - filters:
       - name: datakit
@@ -51,11 +59,11 @@ services:
           # NOTE: these depend on the fact that they are being set during the
           # access phase and because Lua plugins run before wasm filters
           #
-          - name: LUA_PLAIN
+          - name: LUA_VALUE_ENCODED
             type: property
             property: kong.ctx.shared.from_lua
 
-          - name: LUA_JSON
+          - name: LUA_VALUE_DECODED
             type: property
             property: kong.ctx.shared.from_lua
             content_type: application/json
@@ -67,13 +75,10 @@ services:
             type: call
             url: https://api.zippopotam.us/br/93000-000
 
-          - name: API_BODY
+          - name: SET_API_RESPONSE
             type: property
             property: kong.ctx.shared.api_response
-            content_type: application/json
-            inputs:
-              value: API.body
-
+            input: API.body
 
           #
           # fetch a property that we know does not exist
@@ -84,28 +89,57 @@ services:
             property: kong.ctx.shared.nothing_here
 
           #
+          # emit a JSON-encoded string from jq and store it to kong.ctx.shared
+          #
+          - name: JSON_ENCODED_STRING
+            type: jq
+            jq: '"my string"'
+
+          - name: SET_MY_STRING_PLAIN
+            type: property
+            input: JSON_ENCODED_STRING
+            property: kong.ctx.shared.my_string
+
+          - name: SET_MY_STRING_ENCODED
+            type: property
+            input: JSON_ENCODED_STRING
+            property: kong.ctx.shared.my_encoded_string
+            content_type: application/json
+
+          - name: GET_STRING_RAW
+            type: property
+            property: kong.ctx.shared.my_encoded_string
+
+          - name: GET_STRING_DECODED
+            type: property
+            property: kong.ctx.shared.my_encoded_string
+            content_type: application/json
+
+          #
           # assemble a response
           #
           - name: BODY
             type: jq
             inputs:
               # value is also fetched after being set
-              api_response: API_BODY
-              service: SERVICE
-              route_id: ROUTE_ID
-              lua_plain: LUA_PLAIN
-              lua_json: LUA_JSON
-              unset: UNSET_PROP
+              API_body: API.body
+              SERVICE: SERVICE
+              ROUTE_ID: ROUTE_ID
+              LUA_VALUE_ENCODED: LUA_VALUE_ENCODED
+              LUA_VALUE_DECODED: LUA_VALUE_DECODED
+              UNSET_PROP: UNSET_PROP
+              GET_STRING_RAW: GET_STRING_RAW
+              GET_STRING_DECODED: GET_STRING_DECODED
             jq: |
               {
-                api: $api_response,
-                service: $service,
-                route_id: $route_id,
-                lua: {
-                  plain: $lua_plain,
-                  json: $lua_json,
-                },
-                unset: $unset,
+                "API.body": $API_body,
+                SERVICE: $SERVICE,
+                ROUTE_ID: $ROUTE_ID,
+                LUA_VALUE_ENCODED: $LUA_VALUE_ENCODED,
+                LUA_VALUE_DECODED: $LUA_VALUE_DECODED,
+                UNSET_PROP: $UNSET_PROP,
+                GET_STRING_RAW: $GET_STRING_RAW,
+                GET_STRING_DECODED: $GET_STRING_DECODED,
               }
 
           - name: exit

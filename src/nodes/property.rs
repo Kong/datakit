@@ -54,30 +54,31 @@ impl From<&PropertyConfig> for Property {
     }
 }
 
-impl Node for Property {
-    fn run(&self, ctx: &dyn HttpContext, input: &Input) -> State {
-        let content_type = &mut self.config.content_type.as_deref();
+impl Property {
+    fn set(&self, ctx: &dyn HttpContext, payload: &Payload) -> State {
+        #[cfg(debug_assertions)]
+        log::debug!("SET property {:?} => {:?}", self.config.path, payload);
 
-        // set the property first if we have an input
-        if let Some(Some(payload)) = input.data.first() {
-            #[cfg(debug_assertions)]
-            log::debug!("SET property {:?} => {:?}", self.config.path, payload);
+        let content_type = self.config.content_type.as_deref();
 
-            if content_type.is_none() {
-                *content_type = payload.content_type();
+        match payload.to_bytes(content_type) {
+            Ok(bytes) => {
+                ctx.set_property(self.config.to_path(), Some(bytes.as_slice()));
+                // XXX: we have to return _something_ here or else things
+                // blow up, but passing the input payload through would
+                // require a clone
+                Done(vec![Some(Payload::json_null())])
             }
+            Err(e) => Fail(vec![Some(Payload::Error(e))]),
+        }
+    }
 
-            match payload.to_bytes(*content_type) {
-                Ok(bytes) => ctx.set_property(self.config.to_path(), Some(bytes.as_slice())),
-                Err(e) => {
-                    return Fail(vec![Some(Payload::Error(e))]);
-                }
-            }
-        };
+    fn get(&self, ctx: &dyn HttpContext) -> State {
+        let content_type = self.config.content_type.as_deref();
 
         Done(match ctx.get_property(self.config.to_path()) {
             Some(bytes) => {
-                let payload = Payload::from_bytes(bytes, *content_type);
+                let payload = Payload::from_bytes(bytes, content_type);
 
                 #[cfg(debug_assertions)]
                 log::debug!("GET property {:?} => {:?}", &self.config.path, payload);
@@ -91,6 +92,17 @@ impl Node for Property {
                 vec![Some(Payload::json_null())]
             }
         })
+    }
+}
+
+impl Node for Property {
+    fn run(&self, ctx: &dyn HttpContext, input: &Input) -> State {
+        // set the property if we have an input
+        if let Some(Some(payload)) = input.data.first() {
+            return self.set(ctx, payload);
+        }
+
+        self.get(ctx)
     }
 }
 
@@ -211,6 +223,9 @@ mod test {
         ($v:expr) => {
             State::Done(vec![$v])
         };
+        () => {
+            State::Done(vec![Some(Payload::json_null())])
+        };
     }
 
     macro_rules! fail {
@@ -309,7 +324,7 @@ mod test {
         let input = input!(Some(&payload));
 
         let state = run!(&node, &ctx, &input);
-        assert_eq!(done!(Some(payload)), state);
+        assert_eq!(done!(), state);
         assert_eq!(Some(value.into()), ctx.get(property));
     }
 
@@ -327,8 +342,7 @@ mod test {
 
         let node = node!(property);
         let state = run!(&node, &ctx, &input!(Some(&payload)));
-
-        assert_eq!(done!(Some(payload)), state);
+        assert_eq!(done!(), state);
     }
 
     #[test]
@@ -363,12 +377,69 @@ mod test {
             "a": 1,
         });
 
-        let raw = Payload::Raw(json.to_string().into());
+        let encoded = json.to_string();
+
         let json = Payload::Json(json);
 
         let node = node!(property, "text/plain");
         let state = run!(&node, &ctx, &input!(Some(&json)));
-        assert_eq!(done!(Some(raw)), state);
+        assert_eq!(done!(), state);
+        assert_eq!(Some(encoded), ctx.get(property));
+    }
+
+    #[test]
+    fn set_property_from_json_string_no_content_type() {
+        let property = "test.property";
+
+        let ctx = Mock::new();
+
+        let raw = "my string".to_string();
+        let json = serde_json::Value::String(raw.clone());
+
+        let payload = Payload::Json(json.clone());
+
+        let node = node!(property);
+        let state = run!(&node, &ctx, &input!(Some(&payload)));
+
+        assert_eq!(done!(), state);
+        assert_eq!(Some(raw), ctx.get(property));
+    }
+
+    #[test]
+    fn set_property_from_json_string_plain_content_type() {
+        let property = "test.property";
+
+        let ctx = Mock::new();
+
+        let raw = "my string".to_string();
+        let json = serde_json::Value::String(raw.clone());
+
+        let payload = Payload::Json(json.clone());
+
+        let node = node!(property, "text/plain");
+        let state = run!(&node, &ctx, &input!(Some(&payload)));
+
+        assert_eq!(done!(), state);
+        assert_eq!(Some(raw), ctx.get(property));
+    }
+
+    #[test]
+    fn set_property_from_json_string_json_content_type() {
+        let property = "test.property";
+
+        let ctx = Mock::new();
+
+        let raw = "my string".to_string();
+        let json = serde_json::Value::String(raw.clone());
+        let encoded = json.to_string();
+
+        let payload = Payload::Json(json.clone());
+
+        let node = node!(property, JSON_CONTENT_TYPE);
+        let state = run!(&node, &ctx, &input!(Some(&payload)));
+
+        assert_eq!(done!(), state);
+        assert_eq!(Some(encoded), ctx.get(property));
     }
 
     #[test]
@@ -386,7 +457,7 @@ mod test {
         let input = input!(Some(&payload));
 
         let state = run!(&node, &ctx, &input);
-        assert_eq!(done!(Some(Payload::Raw(new.into()))), state);
+        assert_eq!(done!(), state);
         assert_eq!(Some(new.into()), ctx.get(property));
     }
 
