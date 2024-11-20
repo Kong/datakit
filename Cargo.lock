@@ -99,6 +99,7 @@ name = "datakit"
 version = "0.1.1"
 dependencies = [
  "derivative",
+ "form_urlencoded",
  "handlebars",
  "jaq-core",
  "jaq-interpret",

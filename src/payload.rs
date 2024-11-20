@@ -27,6 +27,8 @@ impl Payload {
                         Ok(v) => Some(Payload::Json(v)),
                         Err(e) => Some(Payload::Error(e.to_string())),
                     }
+                } else if ct.contains("application/x-www-form-urlencoded") {
+                    Some(Payload::Json(urlencoded_bytes_to_map(&bytes).into()))
                 } else {
                     Some(Payload::Raw(bytes))
                 }
@@ -172,6 +174,16 @@ pub fn to_json_error_body(message: &str, request_id: Option<Vec<u8>>) -> String 
     .ok()
     .map(|v| v.to_string())
     .expect("JSON error object")
+}
+
+pub fn urlencoded_bytes_to_map(input: &[u8]) -> serde_json::Map<String, serde_json::Value> {
+    let mut map = serde_json::Map::new();
+
+    for (k, v) in form_urlencoded::parse(input) {
+        map.insert(k.into(), v.into());
+    }
+
+    map
 }
 
 #[cfg(test)]
