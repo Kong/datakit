@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use crate::config::get_config_value;
 use crate::data::{Input, State, State::*};
 use crate::nodes::{Node, NodeConfig, NodeFactory, PortConfig};
-use crate::payload::{Payload, JSON_CONTENT_TYPE};
+use crate::payload::Payload;
 
 #[derive(Clone, Debug)]
 pub struct PropertyConfig {
@@ -63,8 +63,8 @@ impl Node for Property {
             #[cfg(debug_assertions)]
             log::debug!("SET property {:?} => {:?}", self.config.path, payload);
 
-            if payload.is_json() && content_type.is_none() {
-                *content_type = Some(JSON_CONTENT_TYPE);
+            if content_type.is_none() {
+                *content_type = payload.content_type();
             }
 
             match payload.to_bytes() {
@@ -135,6 +135,7 @@ impl NodeFactory for PropertyFactory {
 ///* TODO: see if we can use https://github.com/proxy-wasm/test-framework
 #[cfg(test)]
 mod test {
+    use crate::payload::JSON_CONTENT_TYPE;
     use mock_proxy_wasm::*;
     use proxy_wasm::types::Bytes;
     use std::{cell::RefCell, collections::HashMap};
