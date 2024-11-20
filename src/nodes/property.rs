@@ -64,10 +64,7 @@ impl Property {
         match payload.to_bytes(content_type) {
             Ok(bytes) => {
                 ctx.set_property(self.config.to_path(), Some(bytes.as_slice()));
-                // XXX: we have to return _something_ here or else things
-                // blow up, but passing the input payload through would
-                // require a clone
-                Done(vec![Some(Payload::json_null())])
+                Done(vec![None])
             }
             Err(e) => Fail(vec![Some(Payload::Error(e))]),
         }
@@ -223,7 +220,7 @@ mod test {
             State::Done(vec![$v])
         };
         () => {
-            State::Done(vec![Some(Payload::json_null())])
+            State::Done(vec![None])
         };
     }
 
