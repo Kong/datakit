@@ -33,14 +33,14 @@ message "Building the filter using cargo..."
 
 (
     cd ../..
-    cargo build --target=wasm32-wasip1 --release || exit 1
+    cargo build --target=wasm32-wasip1 || exit 1
 ) || exit 1
 
 ### Copy filter to wasm/ #######################################################
 
 mkdir -p wasm
 
-cp -a ../../target/wasm32-wasip1/release/*.wasm wasm/
+cp -a ../../target/wasm32-wasip1/debug/*.wasm wasm/
 cp ../../*.meta.json wasm/
 
 script_dir=$(dirname $(realpath $0))
@@ -89,6 +89,6 @@ sleep 5
 
 message "Now let's send a request to see the filter in effect:"
 
-http POST :8000/anything foo=bar
+http --print hb POST :8000/anything foo=bar
 
 message "Finishing up!"
