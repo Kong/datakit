@@ -108,13 +108,13 @@ pub struct PropertyFactory {}
 impl NodeFactory for PropertyFactory {
     fn default_input_ports(&self) -> PortConfig {
         PortConfig {
-            defaults: PortConfig::names(&["value"]),
+            defaults: Some(PortConfig::names(&["value"])),
             user_defined_ports: false,
         }
     }
     fn default_output_ports(&self) -> PortConfig {
         PortConfig {
-            defaults: PortConfig::names(&["value"]),
+            defaults: Some(PortConfig::names(&["value"])),
             user_defined_ports: false,
         }
     }

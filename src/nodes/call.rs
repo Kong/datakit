@@ -128,13 +128,13 @@ pub struct CallFactory {}
 impl NodeFactory for CallFactory {
     fn default_input_ports(&self) -> PortConfig {
         PortConfig {
-            defaults: PortConfig::names(&["body", "headers", "query"]),
+            defaults: Some(PortConfig::names(&["body", "headers", "query"])),
             user_defined_ports: false,
         }
     }
     fn default_output_ports(&self) -> PortConfig {
         PortConfig {
-            defaults: PortConfig::names(&["body", "headers"]),
+            defaults: Some(PortConfig::names(&["body", "headers"])),
             user_defined_ports: false,
         }
     }
