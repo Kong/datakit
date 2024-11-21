@@ -58,10 +58,6 @@ impl Data {
         Data { graph, states }
     }
 
-    pub fn get_node_name(&self, i: usize) -> &str {
-        self.graph.get_node_name(i).expect("valid index")
-    }
-
     pub fn set(&mut self, node: usize, state: State) {
         self.states[node] = Some(state);
     }

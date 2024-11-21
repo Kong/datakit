@@ -53,10 +53,6 @@ impl DependencyGraph {
         }
     }
 
-    pub fn get_node_name(&self, i: usize) -> Option<&str> {
-        self.node_names.get(i).map(|o| o.as_ref())
-    }
-
     pub fn number_of_nodes(&self) -> usize {
         self.node_names.len()
     }
@@ -126,7 +122,7 @@ impl DependencyGraph {
         !self.dependents[node][port].is_empty()
     }
 
-    pub fn has_providers(&self, node: usize, port: usize) -> bool {
+    pub fn has_provider(&self, node: usize, port: usize) -> bool {
         self.providers[node][port].is_some()
     }
 

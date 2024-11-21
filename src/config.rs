@@ -659,6 +659,10 @@ impl Config {
         self.n_implicits
     }
 
+    pub fn get_node_name(&self, i: usize) -> &str {
+        &self.node_list.get(i).expect("valid index").name
+    }
+
     pub fn node_types(&self) -> impl Iterator<Item = (&str, &str)> {
         self.node_list
             .iter()
