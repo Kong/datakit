@@ -1,4 +1,5 @@
 use lazy_static::lazy_static;
+use payload::URLENCODED_CONTENT_TYPE;
 use proxy_wasm::{traits::*, types::*};
 use std::rc::Rc;
 
@@ -40,6 +41,7 @@ impl From<ImplicitNodeId> for usize {
 enum ImplicitPortId {
     Body = 0,
     Headers = 1,
+    Query = 2,
 }
 
 impl From<ImplicitPortId> for usize {
@@ -49,7 +51,7 @@ impl From<ImplicitPortId> for usize {
 }
 
 lazy_static! {
-    static ref REQ_PORTS: Vec<String> = PortConfig::names(&["body", "headers"]);
+    static ref REQ_PORTS: Vec<String> = PortConfig::names(&["body", "headers", "query"]);
     static ref RESP_PORTS: Vec<String> = PortConfig::names(&["body", "headers"]);
     static ref IMPLICIT_NODES: Vec<ImplicitNode> = vec![
         ImplicitNode::new("request", vec![], REQ_PORTS.clone()),
@@ -107,9 +109,11 @@ impl RootContext for DataKitFilterRootContext {
         let data = Data::new(graph.clone());
 
         let do_request_headers = graph.has_dependents(Request.into(), Headers.into());
+        let do_request_query = graph.has_dependents(Request.into(), Query.into());
         let do_request_body = graph.has_dependents(Request.into(), Body.into());
 
         let do_service_request_headers = graph.has_provider(ServiceRequest.into(), Headers.into());
+        let do_service_request_query = graph.has_provider(ServiceRequest.into(), Query.into());
         let do_service_request_body = graph.has_provider(ServiceRequest.into(), Body.into());
 
         let do_service_response_headers =
@@ -126,8 +130,10 @@ impl RootContext for DataKitFilterRootContext {
             data,
             failed: false,
             do_request_headers,
+            do_request_query,
             do_request_body,
             do_service_request_headers,
+            do_service_request_query,
             do_service_request_body,
             do_service_response_headers,
             do_service_response_body,
@@ -148,8 +154,10 @@ pub struct DataKitFilter {
     debug: Option<Debug>,
     failed: bool,
     do_request_headers: bool,
+    do_request_query: bool,
     do_request_body: bool,
     do_service_request_headers: bool,
+    do_service_request_query: bool,
     do_service_request_body: bool,
     do_service_response_headers: bool,
     do_service_response_body: bool,
@@ -229,12 +237,24 @@ impl DataKitFilter {
         self.set_implicit_data(node, Headers, payload);
     }
 
+    fn set_query_data(&mut self, node: ImplicitNodeId, query: &str) {
+        if let Some(payload) =
+            Payload::from_bytes(query.as_bytes().to_vec(), Some(URLENCODED_CONTENT_TYPE))
+        {
+            self.set_implicit_data(node, Query, payload);
+        }
+    }
+
     fn set_body_data(&mut self, node: ImplicitNodeId, payload: Payload) {
         self.set_implicit_data(node, Body, payload);
     }
 
     fn get_headers_data(&self, node: ImplicitNodeId) -> Option<&Payload> {
         self.data.fetch_port(node.into(), Headers.into())
+    }
+
+    fn get_query_data(&self, node: ImplicitNodeId) -> Option<&Payload> {
+        self.data.fetch_port(node.into(), Query.into())
     }
 
     fn get_body_data(&self, node: ImplicitNodeId) -> Option<&Payload> {
@@ -308,9 +328,17 @@ impl DataKitFilter {
     fn set_service_request_headers(&mut self) {
         if self.do_service_request_headers {
             if let Some(payload) = self.get_headers_data(ServiceRequest) {
-                let headers = payload::to_pwm_headers(Some(payload));
-                self.set_http_request_headers(headers);
+                self.set_http_request_headers(payload::to_pwm_headers(Some(payload)));
                 self.do_service_request_headers = false;
+            }
+        }
+        if self.do_service_request_query {
+            if let Some(qpayload) = self.get_query_data(ServiceRequest) {
+                if let Some(path) = self.get_http_request_header(":path") {
+                    let pq: String = update_query_in_path(&path, qpayload);
+                    self.set_http_request_header(":path", Some(&pq));
+                }
+                self.do_service_request_query = false;
             }
         }
     }
@@ -352,6 +380,12 @@ impl DataKitFilter {
             }
         }
     }
+}
+
+fn update_query_in_path(path: &str, qpayload: &Payload) -> String {
+    (path.split_once('?').map_or(path.as_ref(), |t| t.0)).to_owned()
+        + "?"
+        + &qpayload.to_pwm_query()
 }
 
 impl Context for DataKitFilter {
@@ -413,8 +447,14 @@ impl HttpContext for DataKitFilter {
         }
 
         if self.do_request_headers {
-            let vec = self.get_http_request_headers();
-            self.set_headers_data(Request, vec);
+            self.set_headers_data(Request, self.get_http_request_headers());
+        }
+
+        if self.do_request_query {
+            if let Some(path) = self.get_http_request_header(":path") {
+                let q = path.split_once('?').map_or("", |t| t.1);
+                self.set_query_data(Request, q);
+            }
         }
 
         let action = self.run_nodes(HttpRequestHeaders);
