@@ -109,15 +109,15 @@ impl RootContext for DataKitFilterRootContext {
         let do_request_headers = graph.has_dependents(Request.into(), Headers.into());
         let do_request_body = graph.has_dependents(Request.into(), Body.into());
 
-        let do_service_request_headers = graph.has_providers(ServiceRequest.into(), Headers.into());
-        let do_service_request_body = graph.has_providers(ServiceRequest.into(), Body.into());
+        let do_service_request_headers = graph.has_provider(ServiceRequest.into(), Headers.into());
+        let do_service_request_body = graph.has_provider(ServiceRequest.into(), Body.into());
 
         let do_service_response_headers =
             graph.has_dependents(ServiceResponse.into(), Headers.into());
         let do_service_response_body = graph.has_dependents(ServiceResponse.into(), Body.into());
 
-        let do_response_headers = graph.has_providers(Response.into(), Headers.into());
-        let do_response_body = graph.has_providers(Response.into(), Body.into());
+        let do_response_headers = graph.has_provider(Response.into(), Headers.into());
+        let do_response_body = graph.has_provider(Response.into(), Body.into());
 
         Some(Box::new(DataKitFilter {
             config,
@@ -214,7 +214,7 @@ impl DataKitFilter {
         match r {
             Ok(()) => {
                 if let Some(debug) = &mut self.debug {
-                    let name = self.data.get_node_name(node.into());
+                    let name = self.config.get_node_name(node.into());
                     if let Ok(state) = self.data.get_state(node.into()) {
                         debug.set_data(name, state);
                     }
@@ -270,7 +270,7 @@ impl DataKitFilter {
                     let state = node.run(self as &dyn HttpContext, &input);
 
                     if let Some(ref mut debug) = self.debug {
-                        let name = self.data.get_node_name(i);
+                        let name = self.config.get_node_name(i);
                         debug.run(name, &inputs, &state, RunMode::Run);
                     }
 
@@ -372,7 +372,7 @@ impl Context for DataKitFilter {
                 let state = node.resume(self, &input);
 
                 if let Some(ref mut debug) = self.debug {
-                    let name = self.data.get_node_name(i);
+                    let name = self.config.get_node_name(i);
                     debug.run(name, &inputs, &state, RunMode::Resume);
                 }
 
