@@ -36,13 +36,13 @@ executing.
 
 The following node types are implemented:
 
-**Node type**        | **Input ports**   | **Output ports**  |  **Supported attributes**
---------------------:|:-----------------:|:-----------------:|:-----------------------------
-`call                | `body`, `headers` | `body`, `headers` | `url`, `method`, `timeout`
-`jq`                 | user-defined      | user-defined      | `jq`
-`handlebars`         | user-defined      | `output`          | `template`, `content_type`
-`exit`               | `body`, `headers` |                   | `status`
-`property`           | `value`           | `value`           | `property`, `content_type`
+**Node type**        | **Input ports**            | **Output ports**  |  **Supported attributes**
+--------------------:|:--------------------------:|:-----------------:|:-----------------------------
+`call`               | `body`, `headers`, `query` | `body`, `headers` | `url`, `method`, `timeout`
+`jq`                 | user-defined               | user-defined      | `jq`
+`handlebars`         | user-defined               | `output`          | `template`, `content_type`
+`exit`               | `body`, `headers`          |                   | `status`
+`property`           | `value`                    | `value`           | `property`, `content_type`
 
 ### `call` node type
 
@@ -52,6 +52,7 @@ An HTTP dispatch call.
 
 * `body`: body to use in the dispatch request.
 * `headers`: headers to use in the dispatch request.
+* `query`: key-value pairs to encode as the query string.
 
 #### Output ports:
 
