@@ -61,7 +61,7 @@ An HTTP dispatch call.
 
 #### Supported attributes:
 
-* `url`: the URL to use when dispatching.
+* `url` (**required**): the URL to use when dispatching.
 * `method`: the HTTP method (default is `GET`).
 * `timeout`: the dispatch timeout, in seconds (default is 60).
 
@@ -198,17 +198,22 @@ DataKit defines a number of implicit nodes that can be used without being
 explicitly declared. These reserved node names cannot be used for user-defined
 nodes. These are:
 
-**Node**             | **Input ports**   | **Output ports**  |  **Description**
---------------------:|:-----------------:|:-----------------:|:------------------
-`request`            |                   | `body`, `headers` | the incoming request
-`service_request`    | `body`, `headers` |                   | request sent to the service being proxied to
-`service_response`   |                   | `body`, `headers` | response sent by the service being proxied to
-`response`           | `body`, `headers` |                   | response to be sent to the incoming request
+**Node**             | **Input ports**            | **Output ports**           |  **Description**
+--------------------:|:--------------------------:|:--------------------------:|:------------------
+`request`            |                            | `body`, `headers`, `query` | the incoming request
+`service_request`    | `body`, `headers`, `query` |                            | request sent to the service being proxied to
+`service_response`   |                            | `body`, `headers`          | response sent by the service being proxied to
+`response`           | `body`, `headers`          |                            | response to be sent to the incoming request
 
 The `headers` ports produce and consume maps from header names to their values.
 Keys are header names are normalized to lowercase.
 Values are strings if there is a single instance of a header,
 or arrays of strings if there are multiple instances of the same header.
+
+The `query` ports produce and consume maps with key-value pairs representing
+decoded URL query strings. If the value in the pair is JSON null,
+the key is encoded without a value (to encode `key=null`, use `"null"`
+as a value).
 
 The `body` output ports produce either raw strings or JSON objects,
 depending on their corresponding `Content-Type` values.
