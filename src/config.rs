@@ -12,14 +12,16 @@ use std::fmt::{self, Formatter};
 
 pub struct ImplicitNode {
     name: String,
-    node_type: String,
+    inputs: Vec<String>,
+    outputs: Vec<String>,
 }
 
 impl ImplicitNode {
-    pub fn new(name: &str, node_type: &str) -> ImplicitNode {
+    pub fn new(name: &str, inputs: Vec<String>, outputs: Vec<String>) -> ImplicitNode {
         ImplicitNode {
             name: name.into(),
-            node_type: node_type.into(),
+            inputs,
+            outputs,
         }
     }
 }
@@ -564,10 +566,10 @@ impl UserConfig {
             node_names.push(inode.name.clone());
             nodes.push(NodeInfo {
                 name: inode.name.clone(),
-                node_type: inode.node_type.clone(),
+                node_type: "implicit".into(),
                 node_config: Box::new(nodes::implicit::ImplicitConfig {}),
             });
-            ports.push(PortInfo::new(&inode.node_type, &[], &[]));
+            ports.push(PortInfo::new("implicit", &inode.inputs, &inode.outputs));
         }
 
         for unc in &self.nodes {
@@ -692,11 +694,23 @@ pub fn get_config_value<T: for<'de> serde::Deserialize<'de>>(
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::nodes::PortConfig;
     use serde_json::json;
     use std::any::Any;
 
     fn deserialize_user_config(cfg: &str) -> UserConfig {
         de::from_slice::<UserConfig>(cfg.as_bytes()).unwrap()
+    }
+
+    fn declare_implicits() -> Vec<ImplicitNode> {
+        let req_ports: Vec<String> = PortConfig::names(&["body", "headers", "query"]);
+        let resp_ports: Vec<String> = PortConfig::names(&["body", "headers"]);
+        vec![
+            ImplicitNode::new("request", vec![], req_ports.clone()),
+            ImplicitNode::new("service_request", req_ports.clone(), resp_ports.clone()),
+            ImplicitNode::new("service_response", vec![], resp_ports.clone()),
+            ImplicitNode::new("response", resp_ports.clone(), resp_ports.clone()),
+        ]
     }
 
     #[test]
@@ -877,14 +891,8 @@ mod test {
     }
 
     fn reject_config_with(cfg: &str, message: &str) {
-        nodes::register_node("source", Box::new(nodes::implicit::SourceFactory {}));
-        nodes::register_node("sink", Box::new(nodes::implicit::SinkFactory {}));
-        let implicits = vec![
-            ImplicitNode::new("request", "source"),
-            ImplicitNode::new("service_request", "sink"),
-            ImplicitNode::new("service_response", "source"),
-            ImplicitNode::new("response", "sink"),
-        ];
+        nodes::register_node("implicit", Box::new(nodes::implicit::ImplicitFactory {}));
+        let implicits = declare_implicits();
 
         let result = Config::new(cfg.as_bytes().to_vec(), &implicits);
 
@@ -1023,17 +1031,11 @@ mod test {
             }"#,
         );
 
-        nodes::register_node("source", Box::new(nodes::implicit::SourceFactory {}));
-        nodes::register_node("sink", Box::new(nodes::implicit::SinkFactory {}));
+        nodes::register_node("implicit", Box::new(nodes::implicit::ImplicitFactory {}));
         nodes::register_node("call", Box::new(nodes::call::CallFactory {}));
         nodes::register_node("jq", Box::new(nodes::jq::JqFactory {}));
 
-        let implicits = vec![
-            ImplicitNode::new("request", "source"),
-            ImplicitNode::new("service_request", "sink"),
-            ImplicitNode::new("service_response", "source"),
-            ImplicitNode::new("response", "sink"),
-        ];
+        let implicits = declare_implicits();
 
         let config = uc.into_config(&implicits).unwrap();
         assert!(!config.debug);
@@ -1044,22 +1046,22 @@ mod test {
             vec![
                 NodeInfo {
                     name: "request".into(),
-                    node_type: "source".into(),
+                    node_type: "implicit".into(),
                     node_config: Box::new(IgnoreConfig {}),
                 },
                 NodeInfo {
                     name: "service_request".into(),
-                    node_type: "sink".into(),
+                    node_type: "implicit".into(),
                     node_config: Box::new(IgnoreConfig {}),
                 },
                 NodeInfo {
                     name: "service_response".into(),
-                    node_type: "source".into(),
+                    node_type: "implicit".into(),
                     node_config: Box::new(IgnoreConfig {}),
                 },
                 NodeInfo {
                     name: "response".into(),
-                    node_type: "sink".into(),
+                    node_type: "implicit".into(),
                     node_config: Box::new(IgnoreConfig {}),
                 },
                 NodeInfo {
@@ -1083,7 +1085,7 @@ mod test {
             &[],
             &[None, None, None],
             &[],
-            &[None, None, None],
+            &[None, None],
             &[Some((0, 1))],
             &[Some((4, 0)), None, None],
             &[Some((5, 0)), Some((0, 0))],
@@ -1095,7 +1097,7 @@ mod test {
         }
 
         let output_lists: &[&[&[(usize, usize)]]] = &[
-            &[&[(6, 1)], &[(4, 0)]],
+            &[&[(6, 1)], &[(4, 0)], &[]],
             &[&[], &[]],
             &[&[], &[]],
             &[&[], &[]],

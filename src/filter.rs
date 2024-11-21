@@ -13,7 +13,7 @@ use crate::config::{Config, ImplicitNode};
 use crate::data::{Data, Input, Phase, Phase::*, State};
 use crate::debug::{Debug, RunMode};
 use crate::dependency_graph::DependencyGraph;
-use crate::nodes::{Node, NodeVec};
+use crate::nodes::{Node, NodeVec, PortConfig};
 use crate::payload::Payload;
 use crate::ImplicitNodeId::*;
 use crate::ImplicitPortId::*;
@@ -49,11 +49,13 @@ impl From<ImplicitPortId> for usize {
 }
 
 lazy_static! {
+    static ref REQ_PORTS: Vec<String> = PortConfig::names(&["body", "headers"]);
+    static ref RESP_PORTS: Vec<String> = PortConfig::names(&["body", "headers"]);
     static ref IMPLICIT_NODES: Vec<ImplicitNode> = vec![
-        ImplicitNode::new("request", "source"),
-        ImplicitNode::new("service_request", "sink"),
-        ImplicitNode::new("service_response", "source"),
-        ImplicitNode::new("response", "sink"),
+        ImplicitNode::new("request", vec![], REQ_PORTS.clone()),
+        ImplicitNode::new("service_request", REQ_PORTS.clone(), RESP_PORTS.clone()),
+        ImplicitNode::new("service_response", vec![], RESP_PORTS.clone()),
+        ImplicitNode::new("response", RESP_PORTS.clone(), RESP_PORTS.clone()),
     ];
 }
 
@@ -499,8 +501,7 @@ impl HttpContext for DataKitFilter {
 }
 
 proxy_wasm::main! {{
-    nodes::register_node("source", Box::new(nodes::implicit::SourceFactory {}));
-    nodes::register_node("sink", Box::new(nodes::implicit::SinkFactory {}));
+    nodes::register_node("implicit", Box::new(nodes::implicit::ImplicitFactory {}));
     nodes::register_node("handlebars", Box::new(nodes::handlebars::HandlebarsFactory {}));
     nodes::register_node("call", Box::new(nodes::call::CallFactory {}));
     nodes::register_node("exit", Box::new(nodes::exit::ExitFactory {}));
@@ -515,7 +516,7 @@ proxy_wasm::main! {{
     });
 }}
 
-// interesting test to try out:
+// interesting tests to try out:
 // multiple callouts at once with different settings: http 1.0, 1.1, chunked encoding, content-length
 
 // test with bad responses

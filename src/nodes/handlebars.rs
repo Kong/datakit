@@ -108,7 +108,7 @@ impl NodeFactory for HandlebarsFactory {
 
     fn default_output_ports(&self) -> PortConfig {
         PortConfig {
-            defaults: PortConfig::names(&["output"]),
+            defaults: Some(PortConfig::names(&["output"])),
             user_defined_ports: false,
         }
     }

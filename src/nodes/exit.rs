@@ -116,14 +116,14 @@ pub struct ExitFactory {}
 impl NodeFactory for ExitFactory {
     fn default_input_ports(&self) -> PortConfig {
         PortConfig {
-            defaults: PortConfig::names(&["body", "headers"]),
+            defaults: Some(PortConfig::names(&["body", "headers"])),
             user_defined_ports: false,
         }
     }
 
     fn default_output_ports(&self) -> PortConfig {
         PortConfig {
-            defaults: PortConfig::names(&["body", "headers"]),
+            defaults: Some(PortConfig::names(&["body", "headers"])),
             user_defined_ports: false,
         }
     }

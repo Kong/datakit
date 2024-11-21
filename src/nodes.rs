@@ -21,8 +21,8 @@ pub struct PortConfig {
 }
 
 impl PortConfig {
-    fn names(list: &[&str]) -> Option<Vec<String>> {
-        Some(list.iter().map(|&s| str::to_owned(s)).collect())
+    pub fn names(list: &[&str]) -> Vec<String> {
+        list.iter().map(|&s| str::to_owned(s)).collect()
     }
 
     /// Combine defaults and user-given ports
@@ -33,7 +33,7 @@ impl PortConfig {
         if self.user_defined_ports {
             for port in given {
                 if !list.iter().any(|p| p == port) {
-                    list.push(port.into());
+                    list.push(port.to_string());
                 }
             }
         }
@@ -143,8 +143,7 @@ pub mod implicit {
 
     impl Node for Implicit {}
 
-    pub struct SourceFactory {}
-    pub struct SinkFactory {}
+    pub struct ImplicitFactory {}
 
     #[derive(Debug)]
     pub struct ImplicitConfig {}
@@ -155,48 +154,18 @@ pub mod implicit {
         }
     }
 
-    impl NodeFactory for SourceFactory {
+    impl NodeFactory for ImplicitFactory {
         fn default_input_ports(&self) -> PortConfig {
             PortConfig {
                 defaults: None,
-                user_defined_ports: false,
+                user_defined_ports: true,
             }
         }
 
         fn default_output_ports(&self) -> PortConfig {
             PortConfig {
-                defaults: PortConfig::names(&["body", "headers"]),
-                user_defined_ports: false,
-            }
-        }
-
-        fn new_config(
-            &self,
-            _name: &str,
-            _inputs: &[String],
-            _outputs: &[String],
-            _bt: &BTreeMap<String, Value>,
-        ) -> Result<Box<dyn NodeConfig>, String> {
-            Ok(Box::new(ImplicitConfig {}))
-        }
-
-        fn new_node(&self, _config: &dyn NodeConfig) -> Box<dyn Node> {
-            Box::new(Implicit {})
-        }
-    }
-
-    impl NodeFactory for SinkFactory {
-        fn default_input_ports(&self) -> PortConfig {
-            PortConfig {
-                defaults: PortConfig::names(&["body", "headers", "query"]),
-                user_defined_ports: false,
-            }
-        }
-
-        fn default_output_ports(&self) -> PortConfig {
-            PortConfig {
-                defaults: PortConfig::names(&["body", "headers"]),
-                user_defined_ports: false,
+                defaults: None,
+                user_defined_ports: true,
             }
         }
 
