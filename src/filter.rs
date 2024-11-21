@@ -327,8 +327,10 @@ impl DataKitFilter {
             if let Some(content_length) = payload.len().map(|n| n.to_string()) {
                 set_header(self, "Content-Length", Some(&content_length));
             } else {
-                set_header(self, "Content-Length", Some("")); // FIXME: why doesn't None work?
+                set_header(self, "Content-Length", None);
             }
+        } else {
+            set_header(self, "Content-Length", None);
         }
         set_header(self, "Content-Encoding", None);
     }
