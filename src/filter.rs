@@ -267,6 +267,13 @@ impl DataKitFilter {
                         data: &inputs,
                         phase,
                     };
+
+                    log::debug!(
+                        "running node {} of type {}",
+                        self.config.get_node_name(i),
+                        self.config.get_node_type(i)
+                    );
+
                     let state = node.run(self as &dyn HttpContext, &input);
 
                     if let Some(ref mut debug) = self.debug {
@@ -369,6 +376,13 @@ impl Context for DataKitFilter {
                     data: &inputs,
                     phase: HttpCallResponse,
                 };
+
+                log::debug!(
+                    "resuming node {} of type {}",
+                    self.config.get_node_name(i),
+                    self.config.get_node_type(i)
+                );
+
                 let state = node.resume(self, &input);
 
                 if let Some(ref mut debug) = self.debug {
