@@ -10,6 +10,7 @@ pub enum Payload {
 }
 
 pub const JSON_CONTENT_TYPE: &str = "application/json";
+pub const URLENCODED_CONTENT_TYPE: &str = "application/x-www-form-urlencoded";
 
 impl Payload {
     pub fn content_type(&self) -> Option<&str> {
@@ -19,6 +20,8 @@ impl Payload {
         }
     }
 
+    // FIXME: if we're turning failed conversions into Payload::Error,
+    // I guess this should return Payload, not Option<Payload>.
     pub fn from_bytes(bytes: Vec<u8>, content_type: Option<&str>) -> Option<Payload> {
         match content_type {
             Some(ct) => {
@@ -27,7 +30,7 @@ impl Payload {
                         Ok(v) => Some(Payload::Json(v)),
                         Err(e) => Some(Payload::Error(e.to_string())),
                     }
-                } else if ct.contains("application/x-www-form-urlencoded") {
+                } else if ct.contains(URLENCODED_CONTENT_TYPE) {
                     Some(Payload::Json(urlencoded_bytes_to_map(&bytes).into()))
                 } else {
                     Some(Payload::Raw(bytes))
