@@ -27,3 +27,8 @@ form_urlencoded = "1.2.1"
 
 [dev-dependencies]
 mock_proxy_wasm = { path = "crates/mock_proxy_wasm" }
+
+[package.metadata.wasm-opt]
+# https://github.com/brson/wasm-opt-rs/releases/tag/v0.116.1
+# released 2024-03-31
+version = "0.116.1"
