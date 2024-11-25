@@ -157,6 +157,17 @@ impl Payload {
         }
     }
 
+    pub fn get(&self, key: &str) -> Option<&serde_json::Value> {
+        match self {
+            Payload::Json(serde_json::Value::Object(map)) => map.get(key),
+            _ => None,
+        }
+    }
+
+    pub fn get_str(&self, key: &str) -> Option<&str> {
+        self.get(key).and_then(serde_json::Value::as_str)
+    }
+
     pub fn json_null() -> Self {
         Self::Json(Json::Null)
     }

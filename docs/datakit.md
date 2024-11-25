@@ -58,6 +58,8 @@ An HTTP dispatch call.
 
 * `body`: body returned as the dispatch response.
 * `headers`: headers returned as the dispatch response.
+* `error`: triggered if a dispatch error occurs, such as a DNS resolver timeout, etc.
+  The port returns the error message.
 
 #### Supported attributes:
 
