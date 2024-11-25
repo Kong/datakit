@@ -31,7 +31,7 @@ runs:
         rustup update
 
     - name: build wasm-opt
-      if: steps.toolchain-cache.outputs.cache-hit != 'true' && inputs.wasm-opt == true
+      if: steps.toolchain-cache.outputs.cache-hit != 'true' && inputs.wasm-opt == 'true'
       shell: bash
       run: |
         cargo install wasm-opt
