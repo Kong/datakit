@@ -22,7 +22,9 @@ runs:
           ~/.rustup
           ~/.cargo
           target/
-        key: v4::rust-toolchain::${{ runner.os }}::${{ hashFiles('**/Cargo.lock', 'rust-toolchain.toml', '.github/actions/setup/action.yml') }}::${{ inputs.wasm-opt }}
+        key: v5::rust-toolchain::${{ runner.os }}::${{ hashFiles('**/Cargo.lock', 'rust-toolchain.toml', '.github/actions/setup/action.yml') }}
+        # partial restore for quicker rebuilds on cache miss
+        restore-keys: v5::rust-toolchain::${{ runner.os }}
 
     - name: install rust toolchain
       if: steps.toolchain-cache.outputs.cache-hit != 'true'
@@ -30,8 +32,36 @@ runs:
       run: |
         rustup update
 
-    - name: build wasm-opt
-      if: steps.toolchain-cache.outputs.cache-hit != 'true' && inputs.wasm-opt == 'true'
+    - name: extract wasm-opt version
+      id: wasm-opt-version
+      if: inputs.wasm-opt == 'true'
       shell: bash
       run: |
-        cargo install wasm-opt
+        version=$(
+          cargo metadata --format-version 1 \
+            | jq -r \
+              '.packages[]
+              | select(.name == "datakit")
+              | .metadata["wasm-opt"].version
+            '
+        )
+        echo "version=$version" >> $GITHUB_OUTPUT
+        echo "WASM_OPT_VERSION=$version" >> $GITHUB_ENV
+
+    - name: restore cached wasm-opt
+      uses: actions/cache@v4
+      id: wasm-opt-cache
+      if: inputs.wasm-opt == 'true'
+      with:
+        path: ~/.cargo/bin/wasm-opt
+        key: v1::wasm-opt::${{ env.WASM_OPT_VERSION }}::${{ runner.os }}
+
+    - name: install wasm-opt
+      if: inputs.wasm-opt == 'true' && steps.wasm-opt-cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: cargo install wasm-opt@"$WASM_OPT_VERSION"
+
+    - name: wasm-opt --version
+      if: inputs.wasm-opt == 'true'
+      shell: bash
+      run: wasm-opt --version
