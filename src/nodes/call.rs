@@ -102,11 +102,16 @@ impl Node for Call {
     }
 
     fn resume(&self, ctx: &dyn HttpContext, _inputs: &Input) -> State {
-        log::debug!("call: resume");
+        let headers = payload::from_pwm_headers(ctx.get_http_call_response_headers());
 
-        let headers = Some(payload::from_pwm_headers(
-            ctx.get_http_call_response_headers(),
-        ));
+        if let Some(dispatch_status) = headers.get_str(":dispatch_status") {
+            if dispatch_status != "ok" {
+                #[cfg(debug_assertions)]
+                log::debug!("call: resume failure status: {dispatch_status}");
+
+                return Done(vec![None, None, Some(Payload::Raw(dispatch_status.into()))]);
+            }
+        }
 
         let body = if let Some(body) = ctx.get_http_call_response_body(0, usize::MAX) {
             let content_type = ctx.get_http_call_response_header("Content-Type");
@@ -117,9 +122,8 @@ impl Node for Call {
         };
 
         // TODO only produce an output if it is connected
-        // TODO produce a Fail() status on HTTP >= 400
 
-        Done(vec![body, headers])
+        Done(vec![body, Some(headers), None])
     }
 }
 
@@ -134,7 +138,7 @@ impl NodeFactory for CallFactory {
     }
     fn default_output_ports(&self) -> PortConfig {
         PortConfig {
-            defaults: Some(PortConfig::names(&["body", "headers"])),
+            defaults: Some(PortConfig::names(&["body", "headers", "error"])),
             user_defined_ports: false,
         }
     }

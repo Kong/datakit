@@ -34,18 +34,7 @@ impl NodeConfig for ExitConfig {
     }
 
     fn default_outputs(&self) -> Option<Vec<NodeDefaultLink>> {
-        Some(vec![
-            NodeDefaultLink {
-                this_port: "body".into(),
-                other_node: "response".into(),
-                other_port: "body".into(),
-            },
-            NodeDefaultLink {
-                this_port: "headers".into(),
-                other_node: "response".into(),
-                other_port: "headers".into(),
-            },
-        ])
+        None
     }
 }
 
