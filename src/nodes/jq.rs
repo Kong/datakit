@@ -5,24 +5,12 @@ use proxy_wasm::traits::*;
 use serde_json::Value as JsonValue;
 use std::any::Any;
 use std::collections::BTreeMap;
+use std::rc::Rc;
 
 use crate::config::get_config_value;
 use crate::data::{Input, State};
 use crate::nodes::{Node, NodeConfig, NodeFactory, PortConfig};
 use crate::payload::Payload;
-
-#[derive(Clone, Debug)]
-pub struct JqConfig {
-    jq: String,
-    inputs: Vec<String>,
-    _outputs: Vec<String>, // TODO: implement multiple outputs
-}
-
-impl NodeConfig for JqConfig {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-}
 
 #[derive(Clone)]
 pub struct Jq {
@@ -30,11 +18,9 @@ pub struct Jq {
     filter: Filter,
 }
 
-impl TryFrom<&JqConfig> for Jq {
-    type Error = String;
-
-    fn try_from(config: &JqConfig) -> Result<Self, Self::Error> {
-        Jq::new(&config.jq, config.inputs.clone())
+impl NodeConfig for Rc<Jq> {
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 
@@ -114,8 +100,6 @@ impl Jq {
             return Err("filter compilation failed".to_string());
         }
 
-        let inputs = inputs.clone();
-
         Ok(Jq { inputs, filter })
     }
 
@@ -176,7 +160,7 @@ impl Jq {
     }
 }
 
-impl Node for Jq {
+impl Node for Rc<Jq> {
     fn run(&self, _ctx: &dyn HttpContext, input: &Input) -> State {
         match self.exec(input.data) {
             Ok(results) => {
@@ -228,19 +212,19 @@ impl NodeFactory for JqFactory {
         &self,
         _name: &str,
         inputs: &[String],
-        outputs: &[String],
+        _outputs: &[String],
         bt: &BTreeMap<String, JsonValue>,
     ) -> Result<Box<dyn NodeConfig>, String> {
-        Ok(Box::new(JqConfig {
-            jq: get_config_value(bt, "jq").unwrap_or(".".to_string()),
-            inputs: sanitize_jq_inputs(inputs),
-            _outputs: outputs.to_vec(),
-        }))
+        let filter = get_config_value(bt, "jq").unwrap_or(".".to_string());
+        let inputs = sanitize_jq_inputs(inputs);
+        let jq = Jq::new(&filter, inputs)?;
+
+        Ok(Box::new(Rc::new(jq)))
     }
 
     fn new_node(&self, config: &dyn NodeConfig) -> Box<dyn Node> {
-        match config.as_any().downcast_ref::<JqConfig>() {
-            Some(cc) => Box::new(Jq::try_from(cc).unwrap()),
+        match config.as_any().downcast_ref::<Rc<Jq>>() {
+            Some(jq) => Box::new(jq.clone()),
             None => panic!("incompatible NodeConfig"),
         }
     }
