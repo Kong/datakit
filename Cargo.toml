@@ -16,7 +16,7 @@ serde-json-wasm = "1.0.1"
 serde_json = "*"
 serde = { version = "*", features = ["derive"] }
 lazy_static = "*"
-"url" = "2.5.0"
+"url" = "2.5.4"
 handlebars = "6.2.0"
 jaq-interpret = "1.2.1"
 jaq-parse = "1.0.2"
